@@ -15,36 +15,22 @@ type Ignorer interface {
 
 type noopIgnorer struct{}
 
-func (n noopIgnorer) Match(path string, isDir bool) bool {
-	return false
-}
+func (n noopIgnorer) Match(path string, isDir bool) bool { return false }
 
 type FSWalker struct {
 	inputs []string
-	ignore Ignorer
 }
 
 func New(inputs []string) (*FSWalker, error) {
-	var matcher Ignorer = noopIgnorer{}
-
-	if cwd, err := os.Getwd(); err == nil {
-		gitIgnorePath := filepath.Join(cwd, ".gitignore")
-		if _, err := os.Stat(gitIgnorePath); err == nil {
-			if m, err := gitignore.NewGitIgnore(gitIgnorePath); err == nil {
-				matcher = m
-			}
-		}
-	}
-
 	return &FSWalker{
 		inputs: inputs,
-		ignore: matcher,
 	}, nil
 }
 
 func (w *FSWalker) Walk() iter.Seq2[string, error] {
 	return func(yield func(string, error) bool) {
 		for _, inputRoot := range w.inputs {
+			var ignoreMatcher Ignorer = noopIgnorer{}
 
 			info, err := os.Stat(inputRoot)
 			if err != nil {
@@ -61,6 +47,14 @@ func (w *FSWalker) Walk() iter.Seq2[string, error] {
 				continue
 			}
 
+			gitIgnorePath := filepath.Join(inputRoot, ".gitignore")
+			if _, err := os.Stat(gitIgnorePath); err == nil {
+				if m, err := gitignore.NewGitIgnore(gitIgnorePath); err == nil {
+					ignoreMatcher = m
+				}
+			}
+
+			// scan
 			err = filepath.WalkDir(inputRoot, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err
@@ -73,14 +67,16 @@ func (w *FSWalker) Walk() iter.Seq2[string, error] {
 
 				isDir := d.IsDir()
 
+				// 1. Hardcoded Security Filters
 				if isDir {
 					name := d.Name()
-					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" {
+					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" || name == "dist" || name == "build" {
 						return filepath.SkipDir
 					}
 				}
 
-				if w.ignore.Match(relPath, isDir) {
+				// 2. .gitignore Check
+				if ignoreMatcher.Match(relPath, isDir) {
 					if isDir {
 						return filepath.SkipDir
 					}
@@ -99,7 +95,7 @@ func (w *FSWalker) Walk() iter.Seq2[string, error] {
 			})
 
 			if err != nil {
-				// Log error logic
+				// Log error logic if needed
 			}
 		}
 	}

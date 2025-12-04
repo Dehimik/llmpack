@@ -15,7 +15,7 @@ import (
 	"github.com/dehimik/llmpack/internal/walker"
 )
 
-// for skipping file if it binary
+// for checking if file binary(true->dont add to file)
 func isBinary(content []byte) bool {
 	const maxBytesToCheck = 8000
 	length := len(content)
@@ -71,21 +71,19 @@ func Run(cfg core.Config) error {
 		writers = append(writers, os.Stdout)
 	}
 
-	// Buffer for clipboard
 	var clipboardBuf *bytes.Buffer
 	if cfg.CopyToClipboard {
 		clipboardBuf = new(bytes.Buffer)
 		writers = append(writers, clipboardBuf)
 	}
 
-	// Fallback: if nothing chosen -> write in stdout
 	if len(writers) == 0 {
 		writers = append(writers, os.Stdout)
 	}
 
 	multiWriter := io.MultiWriter(writers...)
 
-	// Pretty path
+	// get pretty path
 	getDisplayPath := func(originalPath string) string {
 		if cwd, err := os.Getwd(); err == nil {
 			if rel, err := filepath.Rel(cwd, originalPath); err == nil {
@@ -95,12 +93,12 @@ func Run(cfg core.Config) error {
 				return rel
 			}
 		}
-		return filepath.Base(originalPath)
+		return originalPath
 	}
 
 	// Generate Tree & Collect Paths
 	var files []string
-	var treeBuilder strings.Builder
+	var displayPaths []string
 
 	fmt.Println("Scanning files...")
 
@@ -112,21 +110,36 @@ func Run(cfg core.Config) error {
 
 		files = append(files, path)
 
-		// Create tree with pretty paths
 		display := getDisplayPath(path)
-		treeBuilder.WriteString(display + "\n")
+		displayPaths = append(displayPaths, display)
 	}
 
-	// start writing
+	// prepare header content
+	var headerContent string
+
+	if cfg.Format == "tree" {
+		// Only if user want visual tree
+		rootNode := buildTree(displayPaths)
+		headerContent = renderTree(rootNode)
+	} else {
+		// For AI no ASCII, only clear paths
+		headerContent = strings.Join(displayPaths, "\n")
+	}
+
+	// write header / start
 	if err := fmtStrategy.Start(multiWriter); err != nil {
 		return err
 	}
 
-	if err := fmtStrategy.WriteTree(multiWriter, treeBuilder.String()); err != nil {
-		return err
+	shouldWriteHeader := cfg.Format == "tree" || !cfg.NoTree
+
+	if shouldWriteHeader {
+		if err := fmtStrategy.WriteTree(multiWriter, headerContent); err != nil {
+			return err
+		}
 	}
 
-	// Optimization: if need only tree, return here
+	// Optimization: Exit if tree-only mode
 	if cfg.Format == "tree" {
 		fmt.Println("Tree generated.")
 		if cfg.CopyToClipboard && clipboardBuf != nil {
@@ -139,24 +152,23 @@ func Run(cfg core.Config) error {
 		return nil
 	}
 
-	// process content
+	// Process Content
 	totalTokens := 0
 	filesProcessed := 0
 
 	fmt.Printf("Packing %d files...\n", len(files))
 
-	for _, path := range files {
+	for i, path := range files {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
 
-		// Binary Check
 		if isBinary(content) {
 			continue
 		}
 
-		display := getDisplayPath(path)
+		display := displayPaths[i]
 
 		if cfg.CountTokens {
 			totalTokens += tk.Count(string(content))
@@ -172,7 +184,7 @@ func Run(cfg core.Config) error {
 		return err
 	}
 
-	// final actions
+	// final
 	if cfg.CopyToClipboard && clipboardBuf != nil {
 		if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
 			fmt.Fprintf(os.Stderr, "\nFailed to copy to clipboard: %v\n", err)

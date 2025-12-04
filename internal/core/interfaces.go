@@ -32,4 +32,5 @@ type Config struct {
 	IgnoreGit       bool
 	CountTokens     bool
 	CopyToClipboard bool
+	NoTree          bool
 }
