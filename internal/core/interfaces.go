@@ -5,7 +5,6 @@ import (
 	"iter"
 )
 
-// Formatter визначає, як ми пакуємо файли (XML, Markdown, Zip)
 type Formatter interface {
 	Name() string
 	Start(w io.Writer) error
@@ -14,26 +13,22 @@ type Formatter interface {
 	Close(w io.Writer) error
 }
 
-// TokenCounter абстрагує підрахунок токенів
 type TokenCounter interface {
 	Count(text string) int
 }
 
-// Filter вирішує, чи брати файл
 type Filter interface {
 	ShouldIgnore(path string, isDir bool) bool
 }
 
-// Walker повертає ітератор шляхів (Go 1.23 feature)
 type Walker interface {
 	Walk() iter.Seq2[string, error]
 }
 
-// Config тримає налаштування запуску
 type Config struct {
-	RootPath        string
+	InputPaths      []string
 	OutputPath      string
-	Format          string // "xml", "markdown", "zip"
+	Format          string // "xml", "markdown", "zip", etc.
 	IgnoreGit       bool
 	CountTokens     bool
 	CopyToClipboard bool

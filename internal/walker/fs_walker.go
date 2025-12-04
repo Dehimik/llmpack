@@ -5,73 +5,102 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/dehimik/llmpack/internal/core"
 	"github.com/monochromegane/go-gitignore"
 )
 
-type FSWalker struct {
-	root   string
-	ignore gitignore.IgnoreMatcher
+type Ignorer interface {
+	Match(path string, isDir bool) bool
 }
 
-func New(root string) (*FSWalker, error) {
-	// Спробуємо завантажити .gitignore з кореня (спрощено для MVP)
-	// У продакшені треба шукати .gitignore рекурсивно
-	matcher := gitignore.NewMatcher([]gitignore.MatchPattern{})
+type noopIgnorer struct{}
 
-	gitIgnorePath := filepath.Join(root, ".gitignore")
-	if _, err := os.Stat(gitIgnorePath); err == nil {
-		matcher, _ = gitignore.NewGitIgnore(gitIgnorePath)
+func (n noopIgnorer) Match(path string, isDir bool) bool {
+	return false
+}
+
+type FSWalker struct {
+	inputs []string
+	ignore Ignorer
+}
+
+func New(inputs []string) (*FSWalker, error) {
+	var matcher Ignorer = noopIgnorer{}
+
+	if cwd, err := os.Getwd(); err == nil {
+		gitIgnorePath := filepath.Join(cwd, ".gitignore")
+		if _, err := os.Stat(gitIgnorePath); err == nil {
+			if m, err := gitignore.NewGitIgnore(gitIgnorePath); err == nil {
+				matcher = m
+			}
+		}
 	}
 
 	return &FSWalker{
-		root:   root,
+		inputs: inputs,
 		ignore: matcher,
 	}, nil
 }
 
-// Walk - це імплементація Go 1.23 ітератора
 func (w *FSWalker) Walk() iter.Seq2[string, error] {
 	return func(yield func(string, error) bool) {
-		err := filepath.WalkDir(w.root, func(path string, d fs.DirEntry, err error) error {
+		for _, inputRoot := range w.inputs {
+
+			info, err := os.Stat(inputRoot)
 			if err != nil {
-				return err
-			}
-
-			relPath, _ := filepath.Rel(w.root, path)
-			if relPath == "." {
-				return nil
-			}
-
-			// 1. Hardcoded Security Filters
-			if d.IsDir() && (d.Name() == ".git" || d.Name() == "node_modules" || d.Name() == ".idea") {
-				return filepath.SkipDir
-			}
-
-			// 2. .gitignore check
-			if w.ignore.Match(path, d.IsDir()) {
-				if d.IsDir() {
-					return filepath.SkipDir
+				if !yield(inputRoot, err) {
+					return
 				}
+				continue
+			}
+
+			if !info.IsDir() {
+				if !yield(inputRoot, nil) {
+					return
+				}
+				continue
+			}
+
+			err = filepath.WalkDir(inputRoot, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				relPath, _ := filepath.Rel(inputRoot, path)
+				if relPath == "." {
+					return nil
+				}
+
+				isDir := d.IsDir()
+
+				if isDir {
+					name := d.Name()
+					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" {
+						return filepath.SkipDir
+					}
+				}
+
+				if w.ignore.Match(relPath, isDir) {
+					if isDir {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				if isDir {
+					return nil
+				}
+
+				if !yield(path, nil) {
+					return filepath.SkipAll
+				}
+
 				return nil
+			})
+
+			if err != nil {
+				// Log error logic
 			}
-
-			if d.IsDir() {
-				return nil
-			}
-
-			// Віддаємо шлях у цикл "for range"
-			if !yield(path, nil) {
-				return filepath.SkipAll
-			}
-
-			return nil
-		})
-
-		if err != nil {
-			// Можна логувати помилку обходу, якщо треба
 		}
 	}
 }
