@@ -23,13 +23,13 @@ Designed for developers who are tired of manually copying and pasting files or s
 If you have Go installed:
 
 ```bash
-go install [github.com/dehimik/llmpack/cmd/llmpack@latest](https://github.com/dehimik/llmpack/cmd/llmpack@latest)
+go install https://github.com/dehimik/llmpack/cmd/llmpack@latest
 ````
 
 ### Option 2: Build from Source
 
 ```bash
-git clone [https://github.com/dehimik/llmpack.git](https://github.com/dehimik/llmpack.git)
+git clone https://github.com/dehimik/llmpack.git
 cd llmpack
 go build -o llmpack cmd/llmpack/main.go
 
