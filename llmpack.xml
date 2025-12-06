@@ -1,0 +1,2929 @@
+<project_context>
+<file_tree>
+.gitignore
+.llmpack.yaml
+LICENSE
+Makefile
+README.md
+cmd/llmpack/main.go
+go.mod
+go.sum
+internal/app/app.go
+internal/app/tree.go
+internal/config/config.go
+internal/core/interfaces.go
+internal/formatter/markdown.go
+internal/formatter/tree.go
+internal/formatter/xml.go
+internal/formatter/zip.go
+internal/pricing/estimator.go
+internal/security/scanner.go
+internal/skeleton/go_reducer.go
+internal/skeleton/processor.go
+internal/tokenizer/tokenizer.go
+internal/walker/fs_walker.go
+llmpack.xml
+</file_tree>
+
+<file path=".gitignore">
+<![CDATA[
+.idea
+releases
+]]>
+</file>
+
+<file path=".llmpack.yaml">
+<![CDATA[
+global:
+  format: markdown
+  skeleton: false
+
+profiles:
+  backend:
+    format: xml
+    skeleton: true
+
+ignore:
+  - ".git"
+  - "node_modules"
+  - "images"
+]]>
+</file>
+
+<file path="LICENSE">
+<![CDATA[
+MIT License
+
+Copyright (c) 2025 Vladyslav
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+]]>
+</file>
+
+<file path="Makefile">
+<![CDATA[
+BINARY_NAME=llmpack
+INSTALL_PATH=/usr/local/bin
+ENTRY_POINT=cmd/llmpack/main.go
+
+.PHONY: all build install clean uninstall
+
+all: build
+
+build:
+	@echo "Building $(BINARY_NAME)..."
+	go build -o $(BINARY_NAME) $(ENTRY_POINT)
+
+install: build
+	@echo "Installing to $(INSTALL_PATH)..."
+	sudo mv $(BINARY_NAME) $(INSTALL_PATH)
+	@echo "Installed! Run '$(BINARY_NAME) --help'"
+
+uninstall:
+	@echo "Uninstalling..."
+	sudo rm $(INSTALL_PATH)/$(BINARY_NAME)
+	@echo "Uninstalled."
+
+clean:
+	@echo "Cleaning..."
+	rm -f $(BINARY_NAME)
+	rm -f context.xml context.zip
+]]>
+</file>
+
+<file path="README.md">
+<![CDATA[
+# LLMPack 📦
+
+**LLMPack** is a blazing fast, zero-dependency CLI tool written in Go. It aggregates your codebase into a single, LLM-friendly context file (XML, Markdown, or ZIP), making it easy to feed entire projects to AI models like **ChatGPT (GPT-4o)**, **Claude 3.5**, or **Gemini**.
+
+Designed for developers who are tired of manually copying and pasting files or struggling with `git archive`.
+
+## 🚀 Features
+
+* **Multi-Format Support:** Generate `XML` (best for prompting), `Markdown` (readable), or `ZIP` (for Code Interpreter).
+* **Smart Context:** Generates a concise file list or a visual ASCII tree (`-f tree`) to help LLMs understand project structure.
+* **Token Counting:** Built-in `TikToken` integration instantly estimates the token cost of your context.
+* **Smart Filtering:**
+    * Automatically respects `.gitignore` rules.
+    * Detects and skips binary files to save tokens.
+    * Security filters for sensitive folders (`.git`, `.env`, keys).
+* **Clipboard Integration:** Copy the result directly to your clipboard with `-c`.
+* **Flexible Inputs:** Accepts specific files, multiple directories, or wildcards as arguments.
+* **High Performance:** Built with **Go 1.25+** using iterators and stream processing for minimal memory footprint.
+
+## 📦 Installation
+
+### Option 1: Go Install (Recommended)
+If you have Go installed:
+
+```bash
+go install https://github.com/dehimik/llmpack/cmd/llmpack@latest
+````
+
+### Option 2: Build from Source
+
+```bash
+git clone https://github.com/dehimik/llmpack.git
+cd llmpack
+go build -o llmpack cmd/llmpack/main.go
+
+# Optional: Move to path
+sudo mv llmpack /usr/local/bin/
+```
+
+## 🛠 Usage
+
+### Basic Usage
+
+Pack the current directory into an XML file (default):
+
+```bash
+llmpack .
+# Creates context.xml
+```
+
+### Copy to Clipboard
+
+Pack specific files and folders, then copy to clipboard immediately:
+
+```bash
+llmpack main.go internal/ pkg/utils.go -c
+```
+
+### Output Formats
+
+**XML (Default)** — Best for structured prompts (Claude/GPT):
+
+```bash
+llmpack . -f xml -o context.xml
+```
+
+**Markdown** — Readable format with code blocks:
+
+```bash
+llmpack . -f markdown -o context.md
+```
+
+**ZIP Archive** — For uploading to ChatGPT Code Interpreter:
+
+```bash
+llmpack . -f zip -o project.zip
+```
+
+**Visual Tree** — Generate an ASCII directory tree (no file content):
+
+```bash
+llmpack . -f tree
+```
+
+### Advanced Options
+
+**Disable Tree Header:**
+By default, LLMPack adds a file list at the top of the context. To disable it:
+
+```bash
+llmpack . --no-tree
+```
+
+**Token Counting:**
+Enabled by default. To disable:
+
+```bash
+llmpack . --tokens=false
+```
+
+## ⚙️ Configuration Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path (or `-` for stdout) | `context.xml` |
+| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`) | `xml` |
+| `--clipboard` | `-c` | Copy output to system clipboard | `false` |
+| `--ignore-git` | | Respect `.gitignore` rules | `true` |
+| `--tokens` | | Calculate and display token count | `true` |
+| `--no-tree` | | Disable file tree/list in the output header | `false` |
+
+## 🏗 Architecture
+
+LLMPack is built using a modular architecture in **Go**:
+
+* **Walker:** Uses Go 1.25 iterators (`iter.Seq2`) for efficient file system traversal.
+* **Streaming:** Uses `io.MultiWriter` to stream content to files and clipboard simultaneously without loading everything into RAM.
+* **Tokenizer:** Uses `tiktoken-go` for accurate token estimation.
+
+## 🤝 Contributing
+
+Contributions are welcome\!
+
+1.  Fork the repository.
+2.  Create a feature branch.
+3.  Commit your changes.
+4.  Open a Pull Request.
+
+## 📄 License
+
+MIT License. See [LICENSE](https://www.google.com/search?q=LICENSE) for details.
+]]>
+</file>
+
+<file path="cmd/llmpack/main.go">
+<![CDATA[
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/dehimik/llmpack/internal/app"
+	"github.com/dehimik/llmpack/internal/config"
+	"github.com/dehimik/llmpack/internal/core"
+	"github.com/spf13/cobra"
+)
+
+var (
+	cfg         core.Config
+	profileName string
+)
+
+func hasStdinData() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "llmpack [path]",
+	Short: "Pack your code into LLM-friendly context",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 && !hasStdinData() {
+			return fmt.Errorf("requires at least 1 arg OR data from stdin")
+		}
+		return nil
+	},
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		fileCfg, err := config.Load()
+		if err != nil {
+			if !os.IsNotExist(err) && err.Error() != "config file not found" {
+				fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", err)
+			}
+		}
+
+		settings := fileCfg.Global
+		if profileName != "" {
+			if p, ok := fileCfg.Profiles[profileName]; ok {
+				settings = p
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: Profile '%s' not found in config, using global settings.\n", profileName)
+			}
+		}
+
+		cfg.IgnorePatterns = fileCfg.Ignore
+
+		if !cmd.Flags().Changed("format") && settings.Format != "" {
+			cfg.Format = settings.Format
+		}
+
+		if !cmd.Flags().Changed("ignore-git") {
+			cfg.IgnoreGit = settings.IgnoreGit
+		}
+
+		if !cmd.Flags().Changed("tokens") {
+			cfg.CountTokens = settings.Tokens
+		}
+
+		if !cmd.Flags().Changed("model") {
+			cfg.ModelName = settings.ModelName
+		}
+
+		if !cmd.Flags().Changed("skeleton") {
+			cfg.SkeletonMode = settings.SkeletonMode
+		}
+
+		if !cmd.Flags().Changed("no-tree") {
+			cfg.NoTree = settings.NoTree
+		}
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg.InputPaths = args
+
+		if cfg.OutputPath == "" && !cfg.CopyToClipboard {
+			if cfg.Format == "markdown" || cfg.Format == "md" {
+				cfg.OutputPath = "context.md"
+			} else if cfg.Format == "zip" {
+				cfg.OutputPath = "context.zip"
+			} else {
+				cfg.OutputPath = "context.xml"
+			}
+		}
+
+		if err := app.Run(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+func main() {
+	rootCmd.Flags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
+	rootCmd.Flags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
+
+	rootCmd.Flags().BoolVar(&cfg.IgnoreGit, "ignore-git", true, "Use .gitignore")
+	rootCmd.Flags().BoolVar(&cfg.CountTokens, "tokens", true, "Count tokens")
+	rootCmd.Flags().StringVarP(&cfg.ModelName, "model", "m", "gpt-4o", "Model for cost estimation (gpt-4o, claude-3-5-sonnet, etc.)")
+
+	rootCmd.Flags().BoolVar(&cfg.NoTree, "no-tree", false, "Disable file tree in output header")
+	rootCmd.Flags().BoolVarP(&cfg.CopyToClipboard, "clipboard", "c", false, "Copy output to clipboard")
+	rootCmd.Flags().BoolVar(&cfg.DisableSecurity, "no-security", false, "Disable security checks (secrets detection)")
+
+	rootCmd.Flags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
+	rootCmd.Flags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+]]>
+</file>
+
+<file path="go.mod">
+<![CDATA[
+module github.com/dehimik/llmpack
+
+go 1.25
+
+require (
+	github.com/atotto/clipboard v0.1.4
+	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
+	github.com/pkoukk/tiktoken-go v0.1.8
+	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/dlclark/regexp2 v1.11.5 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
+)
+
+]]>
+</file>
+
+<file path="go.sum">
+<![CDATA[
+github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
+github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
+github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/dlclark/regexp2 v1.11.5 h1:Q/sSnsKerHeCkc/jSTNq1oCm7KiVgUMZRDUoRu0JQZQ=
+github.com/dlclark/regexp2 v1.11.5/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
+github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
+github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 h1:n6/2gBQ3RWajuToeY6ZtZTIKv2v7ThUy5KKusIT0yc0=
+github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00/go.mod h1:Pm3mSP3c5uWn86xMLZ5Sa7JB9GsEZySvHYXCTK4E9q4=
+github.com/pkoukk/tiktoken-go v0.1.8 h1:85ENo+3FpWgAACBaEUVp+lctuTcYUO7BtmfhlN/QTRo=
+github.com/pkoukk/tiktoken-go v0.1.8/go.mod h1:9NiV+i9mJKGj1rYOT+njbv+ZwA/zJxYdewGl6qVatpg=
+github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
+github.com/spf13/cobra v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=
+github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiTUUS4=
+github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
+github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+
+]]>
+</file>
+
+<file path="internal/app/app.go">
+<![CDATA[
+package app
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/atotto/clipboard"
+	"github.com/dehimik/llmpack/internal/core"
+	"github.com/dehimik/llmpack/internal/formatter"
+	"github.com/dehimik/llmpack/internal/pricing"
+	"github.com/dehimik/llmpack/internal/security"
+	"github.com/dehimik/llmpack/internal/skeleton"
+	"github.com/dehimik/llmpack/internal/tokenizer"
+	"github.com/dehimik/llmpack/internal/walker"
+)
+
+// for checking if file binary(true->dont add to file)
+func isBinary(content []byte) bool {
+	const maxBytesToCheck = 8000
+	length := len(content)
+	if length > maxBytesToCheck {
+		length = maxBytesToCheck
+	}
+
+	for _, b := range content[:length] {
+		if b == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func isPiped() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+func Run(cfg core.Config) error {
+	// Setup Formatter
+	var fmtStrategy core.Formatter
+	secScanner := security.New(cfg.DisableSecurity)
+	switch cfg.Format {
+	case "zip":
+		fmtStrategy = formatter.NewZip()
+	case "markdown", "md":
+		fmtStrategy = formatter.NewMarkdown()
+	case "tree":
+		fmtStrategy = formatter.NewTree()
+	default:
+		fmtStrategy = formatter.NewXML()
+	}
+
+	// Setup Walker
+	wk, err := walker.New(cfg.InputPaths, cfg.IgnorePatterns)
+	if err != nil {
+		return fmt.Errorf("failed to init walker: %w", err)
+	}
+
+	// Setup Tokenizer
+	var tk *tokenizer.TikToken
+	if cfg.CountTokens {
+		tk = tokenizer.New()
+	}
+
+	// Output Destination Logic
+	var writers []io.Writer
+
+	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+		f, err := os.Create(cfg.OutputPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		writers = append(writers, f)
+	} else if cfg.OutputPath == "-" {
+		writers = append(writers, os.Stdout)
+	}
+
+	var clipboardBuf *bytes.Buffer
+	if cfg.CopyToClipboard {
+		clipboardBuf = new(bytes.Buffer)
+		writers = append(writers, clipboardBuf)
+	}
+
+	if len(writers) == 0 {
+		writers = append(writers, os.Stdout)
+	}
+
+	multiWriter := io.MultiWriter(writers...)
+
+	totalTokens := 0
+	filesProcessed := 0
+
+	if isPiped() {
+		fmt.Println("Reading from STDIN...")
+
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read stdin: %w", err)
+		}
+
+		if len(content) > 0 {
+			// Security Check
+			if err := secScanner.Scan("stdin_input", content); err != nil {
+				fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
+			} else {
+				if !isBinary(content) {
+					if cfg.CountTokens {
+						totalTokens += tk.Count(string(content))
+					}
+					if err := fmtStrategy.AddFile(multiWriter, "STDIN", content); err != nil {
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "Added content from STDIN (%d bytes)\n", len(content))
+				}
+			}
+		}
+	}
+
+	// get pretty path
+	getDisplayPath := func(originalPath string) string {
+		if cwd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(cwd, originalPath); err == nil {
+				if !strings.HasPrefix(rel, "..") {
+					return rel
+				}
+				return rel
+			}
+		}
+		return originalPath
+	}
+
+	// Generate Tree & Collect Paths
+	var files []string
+	var displayPaths []string
+
+	fmt.Println("Scanning files...")
+
+	for path, err := range wk.Walk() {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error accessing %s: %v\n", path, err)
+			continue
+		}
+
+		files = append(files, path)
+
+		display := getDisplayPath(path)
+		displayPaths = append(displayPaths, display)
+	}
+
+	// prepare header content
+	var headerContent string
+
+	if cfg.Format == "tree" {
+		// Only if user want visual tree
+		rootNode := buildTree(displayPaths)
+		headerContent = renderTree(rootNode)
+	} else {
+		// For AI no ASCII, only clear paths
+		headerContent = strings.Join(displayPaths, "\n")
+	}
+
+	// write header / start
+	if err := fmtStrategy.Start(multiWriter); err != nil {
+		return err
+	}
+
+	shouldWriteHeader := cfg.Format == "tree" || !cfg.NoTree
+
+	if shouldWriteHeader {
+		if err := fmtStrategy.WriteTree(multiWriter, headerContent); err != nil {
+			return err
+		}
+	}
+
+	// Optimization: Exit if tree-only mode
+	if cfg.Format == "tree" {
+		fmt.Println("Tree generated.")
+		if cfg.CopyToClipboard && clipboardBuf != nil {
+			if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy to clipboard: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Copied to clipboard!\n")
+			}
+		}
+		return nil
+	}
+
+	// Process Content
+
+	fmt.Printf("Packing %d files...\n", len(files))
+
+	for i, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		// 1. Binary Check
+		if isBinary(content) {
+			continue
+		}
+
+		// 2. Security Check (До всього іншого)
+		if err := secScanner.Scan(path, content); err != nil {
+			fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
+			continue
+		}
+
+		// 3. Skeleton Mode (Модифікує content)
+		if cfg.SkeletonMode {
+			reduced, err := skeleton.Process(path, content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
+			} else {
+				content = reduced
+			}
+		}
+
+		// 4. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
+		if cfg.CountTokens {
+			totalTokens += tk.Count(string(content))
+		}
+
+		// 5. Write Output
+		display := displayPaths[i]
+		if err := fmtStrategy.AddFile(multiWriter, display, content); err != nil {
+			return err
+		}
+		filesProcessed++
+	}
+
+	if err := fmtStrategy.Close(multiWriter); err != nil {
+		return err
+	}
+
+	// final
+	if cfg.CopyToClipboard && clipboardBuf != nil {
+		if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
+			fmt.Fprintf(os.Stderr, "\nFailed to copy to clipboard: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "\nCopied to clipboard!\n")
+		}
+	}
+
+	// stats
+	fmt.Fprintf(os.Stderr, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
+	if cfg.CountTokens {
+		costStr := pricing.Estimate(totalTokens, cfg.ModelName)
+		fmt.Fprintf(os.Stderr, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
+	}
+
+	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+		fi, _ := os.Stat(cfg.OutputPath)
+		fmt.Fprintf(os.Stderr, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
+	}
+
+	return nil
+}
+
+]]>
+</file>
+
+<file path="internal/app/tree.go">
+<![CDATA[
+package app
+
+import (
+	"sort"
+	"strings"
+)
+
+// Node representing a file or directory in the tree
+type Node struct {
+	Name     string
+	Children map[string]*Node
+	IsFile   bool
+}
+
+func newNode(name string, isFile bool) *Node {
+	return &Node{
+		Name:     name,
+		Children: make(map[string]*Node),
+		IsFile:   isFile,
+	}
+}
+
+// buildTree converts a list of paths into a Node structure
+func buildTree(paths []string) *Node {
+	root := newNode(".", false)
+
+	for _, path := range paths {
+		cleanPath := strings.ReplaceAll(path, "\\", "/")
+		parts := strings.Split(cleanPath, "/")
+
+		current := root
+		for i, part := range parts {
+			if part == "" || part == "." {
+				continue
+			}
+
+			isFile := i == len(parts)-1
+
+			if _, exists := current.Children[part]; !exists {
+				current.Children[part] = newNode(part, isFile)
+			}
+			current = current.Children[part]
+		}
+	}
+	return root
+}
+
+// renderTree generates the string representation
+func renderTree(root *Node) string {
+	var sb strings.Builder
+	printNodes(&sb, root, "", true)
+	return sb.String()
+}
+
+func printNodes(sb *strings.Builder, node *Node, prefix string, isRoot bool) {
+	keys := make([]string, 0, len(node.Children))
+	for k := range node.Children {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for i, name := range keys {
+		child := node.Children[name]
+		isLast := i == len(keys)-1
+
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
+
+		if !isRoot {
+			sb.WriteString(prefix + connector + name + "\n")
+		} else {
+			sb.WriteString(name + "\n")
+		}
+
+		newPrefix := prefix
+		if !isRoot {
+			if isLast {
+				newPrefix += "    "
+			} else {
+				newPrefix += "│   "
+			}
+		}
+
+		// recursion
+		printNodes(sb, child, newPrefix, false)
+	}
+}
+
+]]>
+</file>
+
+<file path="internal/config/config.go">
+<![CDATA[
+package config
+
+import (
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+var DefaultIgnores = []string{
+	".git", ".idea", ".vscode", ".obsidian",
+	"node_modules", "vendor", "dist", "build",
+	"*.lock", "*.log", "*.exe", "*.bin",
+	".DS_Store",
+}
+
+type Settings struct {
+	Format       string `yaml:"format"`
+	IgnoreGit    bool   `yaml:"ignore_git"`
+	SkeletonMode bool   `yaml:"skeleton"`
+	NoTree       bool   `yaml:"no_tree"`
+	Tokens       bool   `yaml:"tokens"`
+	ModelName    string `yaml:"model_name"`
+}
+
+type FileConfig struct {
+	Global   Settings            `yaml:"global"`
+	Profiles map[string]Settings `yaml:"profiles"`
+	Ignore   []string            `yaml:"ignore"` // global ignore list
+}
+
+func Load() (*FileConfig, error) {
+	cfg := &FileConfig{
+		Global: Settings{
+			Format:       "xml",
+			IgnoreGit:    true,
+			SkeletonMode: false,
+			Tokens:       true,
+		},
+		Ignore:   DefaultIgnores,
+		Profiles: make(map[string]Settings),
+	}
+
+	// search file .llmpack.yaml
+	paths := []string{".llmpack.yaml"}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".llmpack.yaml"))
+	}
+
+	var configPath string
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			configPath = p
+			break
+		}
+	}
+
+	if configPath == "" {
+		return cfg, nil
+	}
+
+	// read yaml
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+
+	if len(cfg.Ignore) == 0 {
+		cfg.Ignore = DefaultIgnores
+	}
+
+	return cfg, nil
+}
+
+]]>
+</file>
+
+<file path="internal/core/interfaces.go">
+<![CDATA[
+package core
+
+import (
+	"io"
+	"iter"
+)
+
+type Formatter interface {
+	Name() string
+	Start(w io.Writer) error
+	WriteTree(w io.Writer, tree string) error
+	AddFile(w io.Writer, relPath string, content []byte) error
+	Close(w io.Writer) error
+}
+
+type TokenCounter interface {
+	Count(text string) int
+}
+
+type Filter interface {
+	ShouldIgnore(path string, isDir bool) bool
+}
+
+type Walker interface {
+	Walk() iter.Seq2[string, error]
+}
+
+type Config struct {
+	InputPaths      []string
+	OutputPath      string
+	Format          string // "xml", "markdown", "zip", etc.
+	IgnoreGit       bool
+	CountTokens     bool
+	CopyToClipboard bool
+	NoTree          bool
+	SkeletonMode    bool
+	IgnorePatterns  []string
+	DisableSecurity bool
+	ModelName       string
+}
+
+]]>
+</file>
+
+<file path="internal/formatter/markdown.go">
+<![CDATA[
+package formatter
+
+import (
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+)
+
+type MarkdownFormatter struct{}
+
+func NewMarkdown() *MarkdownFormatter { return &MarkdownFormatter{} }
+
+func (f *MarkdownFormatter) Name() string { return "markdown" }
+
+func (f *MarkdownFormatter) Start(w io.Writer) error {
+	_, err := io.WriteString(w, "# Project Context\n\n")
+	return err
+}
+
+func (f *MarkdownFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := fmt.Fprintf(w, "## File Tree\n```text\n%s\n```\n\n", tree)
+	return err
+}
+
+func (f *MarkdownFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	ext := strings.TrimPrefix(filepath.Ext(relPath), ".")
+	if ext == "" {
+		ext = "text"
+	}
+
+	header := fmt.Sprintf("## File: `%s`\n```%s\n", relPath, ext)
+	footer := "\n```\n\n"
+
+	if _, err := io.WriteString(w, header); err != nil {
+		return err
+	}
+	if _, err := w.Write(content); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, footer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f *MarkdownFormatter) Close(w io.Writer) error {
+	_, err := io.WriteString(w, "---\nGenerated by llmpack")
+	return err
+}
+
+]]>
+</file>
+
+<file path="internal/formatter/tree.go">
+<![CDATA[
+package formatter
+
+import "io"
+
+type TreeFormatter struct{}
+
+func NewTree() *TreeFormatter { return &TreeFormatter{} }
+
+func (f *TreeFormatter) Name() string { return "tree" }
+
+func (f *TreeFormatter) Start(w io.Writer) error {
+	return nil
+}
+
+func (f *TreeFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := io.WriteString(w, tree)
+	return err
+}
+
+func (f *TreeFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	return nil
+}
+
+func (f *TreeFormatter) Close(w io.Writer) error {
+	return nil
+}
+
+]]>
+</file>
+
+<file path="internal/formatter/xml.go">
+<![CDATA[
+package formatter
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type XMLFormatter struct{}
+
+func NewXML() *XMLFormatter { return &XMLFormatter{} }
+
+func (f *XMLFormatter) Name() string { return "xml" }
+
+func (f *XMLFormatter) Start(w io.Writer) error {
+	_, err := io.WriteString(w, "<project_context>\n")
+	return err
+}
+
+func (f *XMLFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := fmt.Fprintf(w, "<file_tree>\n%s\n</file_tree>\n\n", tree)
+	return err
+}
+
+func (f *XMLFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	cleanContent := strings.ReplaceAll(string(content), "]]]]><![CDATA[>", "]]]]]]><![CDATA[><![CDATA[>")
+
+	header := fmt.Sprintf("<file path=\"%s\">\n<![CDATA[\n", relPath)
+	footer := "\n]]]]><![CDATA[>\n</file>\n\n"
+
+	if _, err := io.WriteString(w, header); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(cleanContent)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, footer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f *XMLFormatter) Close(w io.Writer) error {
+	_, err := io.WriteString(w, "</project_context>")
+	return err
+}
+
+]]>
+</file>
+
+<file path="internal/formatter/zip.go">
+<![CDATA[
+package formatter
+
+import (
+	"archive/zip"
+	"io"
+)
+
+type ZipFormatter struct {
+	zw *zip.Writer
+}
+
+func NewZip() *ZipFormatter { return &ZipFormatter{} }
+
+func (f *ZipFormatter) Name() string { return "zip" }
+
+func (f *ZipFormatter) Start(w io.Writer) error {
+	f.zw = zip.NewWriter(w)
+	return nil
+}
+
+func (f *ZipFormatter) WriteTree(w io.Writer, tree string) error {
+	wr, err := f.zw.Create("project_structure.txt")
+	if err != nil {
+		return err
+	}
+	_, err = wr.Write([]byte(tree))
+	return err
+}
+
+func (f *ZipFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	fRel, err := f.zw.Create(relPath)
+	if err != nil {
+		return err
+	}
+	_, err = fRel.Write(content)
+	return err
+}
+
+func (f *ZipFormatter) Close(w io.Writer) error {
+	return f.zw.Close()
+}
+
+]]>
+</file>
+
+<file path="internal/pricing/estimator.go">
+<![CDATA[
+package pricing
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Prices on 2025
+var models = map[string]float64{
+	// OpenAI
+	"gpt-4o":      2.50, // $2.50 / 1M input
+	"gpt-4o-mini": 0.15, // $0.15 / 1M input
+	"o1-preview":  15.00,
+	"o1-mini":     3.00,
+
+	// Anthropic
+	"claude-3-5-sonnet": 3.00,
+	"claude-3-opus":     15.00,
+	"claude-3-haiku":    0.25,
+
+	// Google
+	"gemini-1.5-pro":   3.50, // before 128K context length
+	"gemini-1.5-flash": 0.35,
+}
+
+// Estimate returns formatted price: "$0.0045"
+func Estimate(tokens int, modelName string) string {
+	pricePerMillion, exists := models[strings.ToLower(modelName)]
+	if !exists {
+		pricePerMillion = models["gpt-4o"]
+		return fmt.Sprintf("unknown model, assuming gpt-4o (~$%.4f)", calculate(tokens, pricePerMillion))
+	}
+
+	cost := calculate(tokens, pricePerMillion)
+	return fmt.Sprintf("$%.5f", cost)
+}
+
+func calculate(tokens int, pricePerMillion float64) float64 {
+	return (float64(tokens) / 1_000_000.0) * pricePerMillion
+}
+
+// ListModels return list of models
+func ListModels() string {
+	keys := make([]string, 0, len(models))
+	for k := range models {
+		keys = append(keys, k)
+	}
+	return strings.Join(keys, ", ")
+}
+
+]]>
+</file>
+
+<file path="internal/security/scanner.go">
+<![CDATA[
+package security
+
+import (
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// regexes list
+var (
+	// AWS Access Key ID
+	reAWS = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
+	// OpenAI (sk-...)
+	reOpenAI = regexp.MustCompile(`\bsk-[a-zA-Z0-9]{20,}\b`)
+	// Private Key Headers
+	rePrivateKey = regexp.MustCompile(`-----BEGIN [A-Z]+ PRIVATE KEY-----`)
+)
+
+type Scanner struct {
+	Disabled bool
+}
+
+func New(disabled bool) *Scanner {
+	return &Scanner{Disabled: disabled}
+}
+
+func (s *Scanner) Scan(path string, content []byte) error {
+	if s.Disabled {
+		return nil
+	}
+
+	// 1. Filename Check
+	base := filepath.Base(path)
+	if isSensitiveFilename(base) {
+		return fmt.Errorf("sensitive filename detected: %s", base)
+	}
+
+	// 2. Content Check
+	if reAWS.Match(content) {
+		return fmt.Errorf("potential AWS Access Key detected")
+	}
+	if reOpenAI.Match(content) {
+		return fmt.Errorf("potential OpenAI Key detected")
+	}
+	if rePrivateKey.Match(content) {
+		return fmt.Errorf("private key header detected")
+	}
+
+	return nil
+}
+
+func isSensitiveFilename(name string) bool {
+	switch name {
+	case ".env", ".env.local", ".env.production", "id_rsa", "id_dsa", "id_ed25519":
+		return true
+	}
+
+	ext := filepath.Ext(name)
+	switch ext {
+	case ".pem", ".key", ".p12", ".pfx", ".kdbx":
+		return true
+	}
+
+	if strings.Contains(name, "_secret") || strings.Contains(name, "_token") {
+		// now empty, bcs dangerous
+	}
+
+	return false
+}
+
+]]>
+</file>
+
+<file path="internal/skeleton/go_reducer.go">
+<![CDATA[
+package skeleton
+
+import (
+	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
+)
+
+func reduceGo(content []byte) ([]byte, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return nil, err // Або повернути content, якщо хочеш soft fail
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if fn, ok := n.(*ast.FuncDecl); ok {
+			if fn.Body != nil {
+				fn.Body.List = []ast.Stmt{
+					&ast.ExprStmt{
+						X: &ast.BasicLit{
+							Kind:  token.STRING,
+							Value: "`... implementation hidden ...`", // Or just comment
+						},
+					},
+				}
+			}
+		}
+		return true
+	})
+
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, node); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+]]>
+</file>
+
+<file path="internal/skeleton/processor.go">
+<![CDATA[
+package skeleton
+
+import (
+	"path/filepath"
+)
+
+// Process strategy
+func Process(filename string, content []byte) ([]byte, error) {
+	ext := filepath.Ext(filename)
+
+	switch ext {
+	case ".go":
+		return reduceGo(content)
+	// In future .ts, .py, .java
+	default:
+		return content, nil
+	}
+}
+
+]]>
+</file>
+
+<file path="internal/tokenizer/tokenizer.go">
+<![CDATA[
+package tokenizer
+
+import (
+	"github.com/pkoukk/tiktoken-go"
+)
+
+type TikToken struct {
+	tk *tiktoken.Tiktoken
+}
+
+func New() *TikToken {
+	// encoding GPT-4o / GPT-4
+	tk, _ := tiktoken.GetEncoding("cl100k_base")
+	return &TikToken{tk: tk}
+}
+
+func (t *TikToken) Count(text string) int {
+	if t.tk == nil {
+		return 0
+	}
+	return len(t.tk.Encode(text, nil, nil))
+}
+
+]]>
+</file>
+
+<file path="internal/walker/fs_walker.go">
+<![CDATA[
+package walker
+
+import (
+	"io/fs"
+	"iter"
+	"os"
+	"path/filepath"
+
+	"github.com/monochromegane/go-gitignore"
+)
+
+type Ignorer interface {
+	Match(path string, isDir bool) bool
+}
+
+type noopIgnorer struct{}
+
+func (n noopIgnorer) Match(path string, isDir bool) bool { return false }
+
+type FSWalker struct {
+	inputs         []string
+	ignorePatterns []string
+}
+
+func New(inputs []string, ignorePatterns []string) (*FSWalker, error) {
+	return &FSWalker{
+		inputs:         inputs,
+		ignorePatterns: ignorePatterns,
+	}, nil
+}
+
+func (w *FSWalker) Walk() iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		for _, inputRoot := range w.inputs {
+			var ignoreMatcher Ignorer = noopIgnorer{}
+
+			info, err := os.Stat(inputRoot)
+			if err != nil {
+				if !yield(inputRoot, err) {
+					return
+				}
+				continue
+			}
+
+			if !info.IsDir() {
+				if !yield(inputRoot, nil) {
+					return
+				}
+				continue
+			}
+
+			gitIgnorePath := filepath.Join(inputRoot, ".gitignore")
+			if _, err := os.Stat(gitIgnorePath); err == nil {
+				if m, err := gitignore.NewGitIgnore(gitIgnorePath); err == nil {
+					ignoreMatcher = m
+				}
+			}
+
+			// scan
+			err = filepath.WalkDir(inputRoot, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				relPath, _ := filepath.Rel(inputRoot, path)
+				if relPath == "." {
+					return nil
+				}
+
+				isDir := d.IsDir()
+				name := d.Name()
+
+				for _, pattern := range w.ignorePatterns {
+					if name == pattern {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+					if matched, _ := filepath.Match(pattern, name); matched {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+				}
+
+				// 1. Hardcoded Security Filters
+				if isDir {
+					name := d.Name()
+					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" || name == "dist" || name == "build" {
+						return filepath.SkipDir
+					}
+				}
+
+				// 2. .gitignore Check
+				if ignoreMatcher.Match(relPath, isDir) {
+					if isDir {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				if isDir {
+					return nil
+				}
+
+				if !yield(path, nil) {
+					return filepath.SkipAll
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				// Log error logic if needed
+			}
+		}
+	}
+}
+
+]]>
+</file>
+
+<file path="llmpack.xml">
+<![CDATA[
+<project_context>
+<file_tree>
+.gitignore
+.llmpack.yaml
+LICENSE
+Makefile
+README.md
+cmd/llmpack/main.go
+go.mod
+go.sum
+internal/app/app.go
+internal/app/tree.go
+internal/config/config.go
+internal/core/interfaces.go
+internal/formatter/markdown.go
+internal/formatter/tree.go
+internal/formatter/xml.go
+internal/formatter/zip.go
+internal/pricing/estimator.go
+internal/security/scanner.go
+internal/skeleton/go_reducer.go
+internal/skeleton/processor.go
+internal/tokenizer/tokenizer.go
+internal/walker/fs_walker.go
+llmpack.xml
+</file_tree>
+
+<file path=".gitignore">
+<![CDATA[
+.idea
+releases
+]]]]><![CDATA[>
+</file>
+
+<file path=".llmpack.yaml">
+<![CDATA[
+global:
+  format: markdown
+  skeleton: false
+
+profiles:
+  backend:
+    format: xml
+    skeleton: true
+
+ignore:
+  - ".git"
+  - "node_modules"
+  - "images"
+]]]]><![CDATA[>
+</file>
+
+<file path="LICENSE">
+<![CDATA[
+MIT License
+
+Copyright (c) 2025 Vladyslav
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+]]]]><![CDATA[>
+</file>
+
+<file path="Makefile">
+<![CDATA[
+BINARY_NAME=llmpack
+INSTALL_PATH=/usr/local/bin
+ENTRY_POINT=cmd/llmpack/main.go
+
+.PHONY: all build install clean uninstall
+
+all: build
+
+build:
+	@echo "Building $(BINARY_NAME)..."
+	go build -o $(BINARY_NAME) $(ENTRY_POINT)
+
+install: build
+	@echo "Installing to $(INSTALL_PATH)..."
+	sudo mv $(BINARY_NAME) $(INSTALL_PATH)
+	@echo "Installed! Run '$(BINARY_NAME) --help'"
+
+uninstall:
+	@echo "Uninstalling..."
+	sudo rm $(INSTALL_PATH)/$(BINARY_NAME)
+	@echo "Uninstalled."
+
+clean:
+	@echo "Cleaning..."
+	rm -f $(BINARY_NAME)
+	rm -f context.xml context.zip
+]]]]><![CDATA[>
+</file>
+
+<file path="README.md">
+<![CDATA[
+# LLMPack 📦
+
+**LLMPack** is a blazing fast, zero-dependency CLI tool written in Go. It aggregates your codebase into a single, LLM-friendly context file (XML, Markdown, or ZIP), making it easy to feed entire projects to AI models like **ChatGPT (GPT-4o)**, **Claude 3.5**, or **Gemini**.
+
+Designed for developers who are tired of manually copying and pasting files or struggling with `git archive`.
+
+## 🚀 Features
+
+* **Multi-Format Support:** Generate `XML` (best for prompting), `Markdown` (readable), or `ZIP` (for Code Interpreter).
+* **Smart Context:** Generates a concise file list or a visual ASCII tree (`-f tree`) to help LLMs understand project structure.
+* **Token Counting:** Built-in `TikToken` integration instantly estimates the token cost of your context.
+* **Smart Filtering:**
+    * Automatically respects `.gitignore` rules.
+    * Detects and skips binary files to save tokens.
+    * Security filters for sensitive folders (`.git`, `.env`, keys).
+* **Clipboard Integration:** Copy the result directly to your clipboard with `-c`.
+* **Flexible Inputs:** Accepts specific files, multiple directories, or wildcards as arguments.
+* **High Performance:** Built with **Go 1.25+** using iterators and stream processing for minimal memory footprint.
+
+## 📦 Installation
+
+### Option 1: Go Install (Recommended)
+If you have Go installed:
+
+```bash
+go install https://github.com/dehimik/llmpack/cmd/llmpack@latest
+````
+
+### Option 2: Build from Source
+
+```bash
+git clone https://github.com/dehimik/llmpack.git
+cd llmpack
+go build -o llmpack cmd/llmpack/main.go
+
+# Optional: Move to path
+sudo mv llmpack /usr/local/bin/
+```
+
+## 🛠 Usage
+
+### Basic Usage
+
+Pack the current directory into an XML file (default):
+
+```bash
+llmpack .
+# Creates context.xml
+```
+
+### Copy to Clipboard
+
+Pack specific files and folders, then copy to clipboard immediately:
+
+```bash
+llmpack main.go internal/ pkg/utils.go -c
+```
+
+### Output Formats
+
+**XML (Default)** — Best for structured prompts (Claude/GPT):
+
+```bash
+llmpack . -f xml -o context.xml
+```
+
+**Markdown** — Readable format with code blocks:
+
+```bash
+llmpack . -f markdown -o context.md
+```
+
+**ZIP Archive** — For uploading to ChatGPT Code Interpreter:
+
+```bash
+llmpack . -f zip -o project.zip
+```
+
+**Visual Tree** — Generate an ASCII directory tree (no file content):
+
+```bash
+llmpack . -f tree
+```
+
+### Advanced Options
+
+**Disable Tree Header:**
+By default, LLMPack adds a file list at the top of the context. To disable it:
+
+```bash
+llmpack . --no-tree
+```
+
+**Token Counting:**
+Enabled by default. To disable:
+
+```bash
+llmpack . --tokens=false
+```
+
+## ⚙️ Configuration Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path (or `-` for stdout) | `context.xml` |
+| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`) | `xml` |
+| `--clipboard` | `-c` | Copy output to system clipboard | `false` |
+| `--ignore-git` | | Respect `.gitignore` rules | `true` |
+| `--tokens` | | Calculate and display token count | `true` |
+| `--no-tree` | | Disable file tree/list in the output header | `false` |
+
+## 🏗 Architecture
+
+LLMPack is built using a modular architecture in **Go**:
+
+* **Walker:** Uses Go 1.25 iterators (`iter.Seq2`) for efficient file system traversal.
+* **Streaming:** Uses `io.MultiWriter` to stream content to files and clipboard simultaneously without loading everything into RAM.
+* **Tokenizer:** Uses `tiktoken-go` for accurate token estimation.
+
+## 🤝 Contributing
+
+Contributions are welcome\!
+
+1.  Fork the repository.
+2.  Create a feature branch.
+3.  Commit your changes.
+4.  Open a Pull Request.
+
+## 📄 License
+
+MIT License. See [LICENSE](https://www.google.com/search?q=LICENSE) for details.
+]]]]><![CDATA[>
+</file>
+
+<file path="cmd/llmpack/main.go">
+<![CDATA[
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/dehimik/llmpack/internal/app"
+	"github.com/dehimik/llmpack/internal/config"
+	"github.com/dehimik/llmpack/internal/core"
+	"github.com/spf13/cobra"
+)
+
+var (
+	cfg         core.Config
+	profileName string
+)
+
+func hasStdinData() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "llmpack [path]",
+	Short: "Pack your code into LLM-friendly context",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 && !hasStdinData() {
+			return fmt.Errorf("requires at least 1 arg OR data from stdin")
+		}
+		return nil
+	},
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		fileCfg, err := config.Load()
+		if err != nil {
+			if !os.IsNotExist(err) && err.Error() != "config file not found" {
+				fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", err)
+			}
+		}
+
+		settings := fileCfg.Global
+		if profileName != "" {
+			if p, ok := fileCfg.Profiles[profileName]; ok {
+				settings = p
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: Profile '%s' not found in config, using global settings.\n", profileName)
+			}
+		}
+
+		cfg.IgnorePatterns = fileCfg.Ignore
+
+		if !cmd.Flags().Changed("format") && settings.Format != "" {
+			cfg.Format = settings.Format
+		}
+
+		if !cmd.Flags().Changed("ignore-git") {
+			cfg.IgnoreGit = settings.IgnoreGit
+		}
+
+		if !cmd.Flags().Changed("tokens") {
+			cfg.CountTokens = settings.Tokens
+		}
+
+		if !cmd.Flags().Changed("model") {
+			cfg.ModelName = settings.ModelName
+		}
+
+		if !cmd.Flags().Changed("skeleton") {
+			cfg.SkeletonMode = settings.SkeletonMode
+		}
+
+		if !cmd.Flags().Changed("no-tree") {
+			cfg.NoTree = settings.NoTree
+		}
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg.InputPaths = args
+
+		if cfg.OutputPath == "" && !cfg.CopyToClipboard {
+			if cfg.Format == "markdown" || cfg.Format == "md" {
+				cfg.OutputPath = "context.md"
+			} else if cfg.Format == "zip" {
+				cfg.OutputPath = "context.zip"
+			} else {
+				cfg.OutputPath = "context.xml"
+			}
+		}
+
+		if err := app.Run(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+func main() {
+	rootCmd.Flags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
+	rootCmd.Flags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
+
+	rootCmd.Flags().BoolVar(&cfg.IgnoreGit, "ignore-git", true, "Use .gitignore")
+	rootCmd.Flags().BoolVar(&cfg.CountTokens, "tokens", true, "Count tokens")
+	rootCmd.Flags().StringVarP(&cfg.ModelName, "model", "m", "gpt-4o", "Model for cost estimation (gpt-4o, claude-3-5-sonnet, etc.)")
+
+	rootCmd.Flags().BoolVar(&cfg.NoTree, "no-tree", false, "Disable file tree in output header")
+	rootCmd.Flags().BoolVarP(&cfg.CopyToClipboard, "clipboard", "c", false, "Copy output to clipboard")
+	rootCmd.Flags().BoolVar(&cfg.DisableSecurity, "no-security", false, "Disable security checks (secrets detection)")
+
+	rootCmd.Flags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
+	rootCmd.Flags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="go.mod">
+<![CDATA[
+module github.com/dehimik/llmpack
+
+go 1.25
+
+require (
+	github.com/atotto/clipboard v0.1.4
+	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
+	github.com/pkoukk/tiktoken-go v0.1.8
+	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/dlclark/regexp2 v1.11.5 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
+)
+
+]]]]><![CDATA[>
+</file>
+
+<file path="go.sum">
+<![CDATA[
+github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
+github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
+github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/dlclark/regexp2 v1.11.5 h1:Q/sSnsKerHeCkc/jSTNq1oCm7KiVgUMZRDUoRu0JQZQ=
+github.com/dlclark/regexp2 v1.11.5/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
+github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
+github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 h1:n6/2gBQ3RWajuToeY6ZtZTIKv2v7ThUy5KKusIT0yc0=
+github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00/go.mod h1:Pm3mSP3c5uWn86xMLZ5Sa7JB9GsEZySvHYXCTK4E9q4=
+github.com/pkoukk/tiktoken-go v0.1.8 h1:85ENo+3FpWgAACBaEUVp+lctuTcYUO7BtmfhlN/QTRo=
+github.com/pkoukk/tiktoken-go v0.1.8/go.mod h1:9NiV+i9mJKGj1rYOT+njbv+ZwA/zJxYdewGl6qVatpg=
+github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
+github.com/spf13/cobra v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=
+github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiTUUS4=
+github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
+github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/app/app.go">
+<![CDATA[
+package app
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/atotto/clipboard"
+	"github.com/dehimik/llmpack/internal/core"
+	"github.com/dehimik/llmpack/internal/formatter"
+	"github.com/dehimik/llmpack/internal/pricing"
+	"github.com/dehimik/llmpack/internal/security"
+	"github.com/dehimik/llmpack/internal/skeleton"
+	"github.com/dehimik/llmpack/internal/tokenizer"
+	"github.com/dehimik/llmpack/internal/walker"
+)
+
+// for checking if file binary(true->dont add to file)
+func isBinary(content []byte) bool {
+	const maxBytesToCheck = 8000
+	length := len(content)
+	if length > maxBytesToCheck {
+		length = maxBytesToCheck
+	}
+
+	for _, b := range content[:length] {
+		if b == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func isPiped() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+func Run(cfg core.Config) error {
+	// Setup Formatter
+	var fmtStrategy core.Formatter
+	secScanner := security.New(cfg.DisableSecurity)
+	switch cfg.Format {
+	case "zip":
+		fmtStrategy = formatter.NewZip()
+	case "markdown", "md":
+		fmtStrategy = formatter.NewMarkdown()
+	case "tree":
+		fmtStrategy = formatter.NewTree()
+	default:
+		fmtStrategy = formatter.NewXML()
+	}
+
+	// Setup Walker
+	wk, err := walker.New(cfg.InputPaths, cfg.IgnorePatterns)
+	if err != nil {
+		return fmt.Errorf("failed to init walker: %w", err)
+	}
+
+	// Setup Tokenizer
+	var tk *tokenizer.TikToken
+	if cfg.CountTokens {
+		tk = tokenizer.New()
+	}
+
+	// Output Destination Logic
+	var writers []io.Writer
+
+	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+		f, err := os.Create(cfg.OutputPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		writers = append(writers, f)
+	} else if cfg.OutputPath == "-" {
+		writers = append(writers, os.Stdout)
+	}
+
+	var clipboardBuf *bytes.Buffer
+	if cfg.CopyToClipboard {
+		clipboardBuf = new(bytes.Buffer)
+		writers = append(writers, clipboardBuf)
+	}
+
+	if len(writers) == 0 {
+		writers = append(writers, os.Stdout)
+	}
+
+	multiWriter := io.MultiWriter(writers...)
+
+	totalTokens := 0
+	filesProcessed := 0
+
+	if isPiped() {
+		fmt.Println("Reading from STDIN...")
+
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read stdin: %w", err)
+		}
+
+		if len(content) > 0 {
+			// Security Check
+			if err := secScanner.Scan("stdin_input", content); err != nil {
+				fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
+			} else {
+				if !isBinary(content) {
+					if cfg.CountTokens {
+						totalTokens += tk.Count(string(content))
+					}
+					if err := fmtStrategy.AddFile(multiWriter, "STDIN", content); err != nil {
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "Added content from STDIN (%d bytes)\n", len(content))
+				}
+			}
+		}
+	}
+
+	// get pretty path
+	getDisplayPath := func(originalPath string) string {
+		if cwd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(cwd, originalPath); err == nil {
+				if !strings.HasPrefix(rel, "..") {
+					return rel
+				}
+				return rel
+			}
+		}
+		return originalPath
+	}
+
+	// Generate Tree & Collect Paths
+	var files []string
+	var displayPaths []string
+
+	fmt.Println("Scanning files...")
+
+	for path, err := range wk.Walk() {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error accessing %s: %v\n", path, err)
+			continue
+		}
+
+		files = append(files, path)
+
+		display := getDisplayPath(path)
+		displayPaths = append(displayPaths, display)
+	}
+
+	// prepare header content
+	var headerContent string
+
+	if cfg.Format == "tree" {
+		// Only if user want visual tree
+		rootNode := buildTree(displayPaths)
+		headerContent = renderTree(rootNode)
+	} else {
+		// For AI no ASCII, only clear paths
+		headerContent = strings.Join(displayPaths, "\n")
+	}
+
+	// write header / start
+	if err := fmtStrategy.Start(multiWriter); err != nil {
+		return err
+	}
+
+	shouldWriteHeader := cfg.Format == "tree" || !cfg.NoTree
+
+	if shouldWriteHeader {
+		if err := fmtStrategy.WriteTree(multiWriter, headerContent); err != nil {
+			return err
+		}
+	}
+
+	// Optimization: Exit if tree-only mode
+	if cfg.Format == "tree" {
+		fmt.Println("Tree generated.")
+		if cfg.CopyToClipboard && clipboardBuf != nil {
+			if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy to clipboard: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Copied to clipboard!\n")
+			}
+		}
+		return nil
+	}
+
+	// Process Content
+
+	fmt.Printf("Packing %d files...\n", len(files))
+
+	for i, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		// 1. Binary Check
+		if isBinary(content) {
+			continue
+		}
+
+		// 2. Security Check (До всього іншого)
+		if err := secScanner.Scan(path, content); err != nil {
+			fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
+			continue
+		}
+
+		// 3. Skeleton Mode (Модифікує content)
+		if cfg.SkeletonMode {
+			reduced, err := skeleton.Process(path, content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
+			} else {
+				content = reduced
+			}
+		}
+
+		// 4. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
+		if cfg.CountTokens {
+			totalTokens += tk.Count(string(content))
+		}
+
+		// 5. Write Output
+		display := displayPaths[i]
+		if err := fmtStrategy.AddFile(multiWriter, display, content); err != nil {
+			return err
+		}
+		filesProcessed++
+	}
+
+	if err := fmtStrategy.Close(multiWriter); err != nil {
+		return err
+	}
+
+	// final
+	if cfg.CopyToClipboard && clipboardBuf != nil {
+		if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
+			fmt.Fprintf(os.Stderr, "\nFailed to copy to clipboard: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "\nCopied to clipboard!\n")
+		}
+	}
+
+	// stats
+	fmt.Fprintf(os.Stderr, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
+	if cfg.CountTokens {
+		costStr := pricing.Estimate(totalTokens, cfg.ModelName)
+		fmt.Fprintf(os.Stderr, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
+	}
+
+	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+		fi, _ := os.Stat(cfg.OutputPath)
+		fmt.Fprintf(os.Stderr, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
+	}
+
+	return nil
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/app/tree.go">
+<![CDATA[
+package app
+
+import (
+	"sort"
+	"strings"
+)
+
+// Node representing a file or directory in the tree
+type Node struct {
+	Name     string
+	Children map[string]*Node
+	IsFile   bool
+}
+
+func newNode(name string, isFile bool) *Node {
+	return &Node{
+		Name:     name,
+		Children: make(map[string]*Node),
+		IsFile:   isFile,
+	}
+}
+
+// buildTree converts a list of paths into a Node structure
+func buildTree(paths []string) *Node {
+	root := newNode(".", false)
+
+	for _, path := range paths {
+		cleanPath := strings.ReplaceAll(path, "\\", "/")
+		parts := strings.Split(cleanPath, "/")
+
+		current := root
+		for i, part := range parts {
+			if part == "" || part == "." {
+				continue
+			}
+
+			isFile := i == len(parts)-1
+
+			if _, exists := current.Children[part]; !exists {
+				current.Children[part] = newNode(part, isFile)
+			}
+			current = current.Children[part]
+		}
+	}
+	return root
+}
+
+// renderTree generates the string representation
+func renderTree(root *Node) string {
+	var sb strings.Builder
+	printNodes(&sb, root, "", true)
+	return sb.String()
+}
+
+func printNodes(sb *strings.Builder, node *Node, prefix string, isRoot bool) {
+	keys := make([]string, 0, len(node.Children))
+	for k := range node.Children {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for i, name := range keys {
+		child := node.Children[name]
+		isLast := i == len(keys)-1
+
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
+
+		if !isRoot {
+			sb.WriteString(prefix + connector + name + "\n")
+		} else {
+			sb.WriteString(name + "\n")
+		}
+
+		newPrefix := prefix
+		if !isRoot {
+			if isLast {
+				newPrefix += "    "
+			} else {
+				newPrefix += "│   "
+			}
+		}
+
+		// recursion
+		printNodes(sb, child, newPrefix, false)
+	}
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/config/config.go">
+<![CDATA[
+package config
+
+import (
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+var DefaultIgnores = []string{
+	".git", ".idea", ".vscode", ".obsidian",
+	"node_modules", "vendor", "dist", "build",
+	"*.lock", "*.log", "*.exe", "*.bin",
+	".DS_Store",
+}
+
+type Settings struct {
+	Format       string `yaml:"format"`
+	IgnoreGit    bool   `yaml:"ignore_git"`
+	SkeletonMode bool   `yaml:"skeleton"`
+	NoTree       bool   `yaml:"no_tree"`
+	Tokens       bool   `yaml:"tokens"`
+	ModelName    string `yaml:"model_name"`
+}
+
+type FileConfig struct {
+	Global   Settings            `yaml:"global"`
+	Profiles map[string]Settings `yaml:"profiles"`
+	Ignore   []string            `yaml:"ignore"` // global ignore list
+}
+
+func Load() (*FileConfig, error) {
+	cfg := &FileConfig{
+		Global: Settings{
+			Format:       "xml",
+			IgnoreGit:    true,
+			SkeletonMode: false,
+			Tokens:       true,
+		},
+		Ignore:   DefaultIgnores,
+		Profiles: make(map[string]Settings),
+	}
+
+	// search file .llmpack.yaml
+	paths := []string{".llmpack.yaml"}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".llmpack.yaml"))
+	}
+
+	var configPath string
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			configPath = p
+			break
+		}
+	}
+
+	if configPath == "" {
+		return cfg, nil
+	}
+
+	// read yaml
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+
+	if len(cfg.Ignore) == 0 {
+		cfg.Ignore = DefaultIgnores
+	}
+
+	return cfg, nil
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/core/interfaces.go">
+<![CDATA[
+package core
+
+import (
+	"io"
+	"iter"
+)
+
+type Formatter interface {
+	Name() string
+	Start(w io.Writer) error
+	WriteTree(w io.Writer, tree string) error
+	AddFile(w io.Writer, relPath string, content []byte) error
+	Close(w io.Writer) error
+}
+
+type TokenCounter interface {
+	Count(text string) int
+}
+
+type Filter interface {
+	ShouldIgnore(path string, isDir bool) bool
+}
+
+type Walker interface {
+	Walk() iter.Seq2[string, error]
+}
+
+type Config struct {
+	InputPaths      []string
+	OutputPath      string
+	Format          string // "xml", "markdown", "zip", etc.
+	IgnoreGit       bool
+	CountTokens     bool
+	CopyToClipboard bool
+	NoTree          bool
+	SkeletonMode    bool
+	IgnorePatterns  []string
+	DisableSecurity bool
+	ModelName       string
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/formatter/markdown.go">
+<![CDATA[
+package formatter
+
+import (
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+)
+
+type MarkdownFormatter struct{}
+
+func NewMarkdown() *MarkdownFormatter { return &MarkdownFormatter{} }
+
+func (f *MarkdownFormatter) Name() string { return "markdown" }
+
+func (f *MarkdownFormatter) Start(w io.Writer) error {
+	_, err := io.WriteString(w, "# Project Context\n\n")
+	return err
+}
+
+func (f *MarkdownFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := fmt.Fprintf(w, "## File Tree\n```text\n%s\n```\n\n", tree)
+	return err
+}
+
+func (f *MarkdownFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	ext := strings.TrimPrefix(filepath.Ext(relPath), ".")
+	if ext == "" {
+		ext = "text"
+	}
+
+	header := fmt.Sprintf("## File: `%s`\n```%s\n", relPath, ext)
+	footer := "\n```\n\n"
+
+	if _, err := io.WriteString(w, header); err != nil {
+		return err
+	}
+	if _, err := w.Write(content); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, footer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f *MarkdownFormatter) Close(w io.Writer) error {
+	_, err := io.WriteString(w, "---\nGenerated by llmpack")
+	return err
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/formatter/tree.go">
+<![CDATA[
+package formatter
+
+import "io"
+
+type TreeFormatter struct{}
+
+func NewTree() *TreeFormatter { return &TreeFormatter{} }
+
+func (f *TreeFormatter) Name() string { return "tree" }
+
+func (f *TreeFormatter) Start(w io.Writer) error {
+	return nil
+}
+
+func (f *TreeFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := io.WriteString(w, tree)
+	return err
+}
+
+func (f *TreeFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	return nil
+}
+
+func (f *TreeFormatter) Close(w io.Writer) error {
+	return nil
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/formatter/xml.go">
+<![CDATA[
+package formatter
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type XMLFormatter struct{}
+
+func NewXML() *XMLFormatter { return &XMLFormatter{} }
+
+func (f *XMLFormatter) Name() string { return "xml" }
+
+func (f *XMLFormatter) Start(w io.Writer) error {
+	_, err := io.WriteString(w, "<project_context>\n")
+	return err
+}
+
+func (f *XMLFormatter) WriteTree(w io.Writer, tree string) error {
+	_, err := fmt.Fprintf(w, "<file_tree>\n%s\n</file_tree>\n\n", tree)
+	return err
+}
+
+func (f *XMLFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	cleanContent := strings.ReplaceAll(string(content), "]]]]]]><![CDATA[><![CDATA[>", "]]]]]]]]><![CDATA[><![CDATA[><![CDATA[>")
+
+	header := fmt.Sprintf("<file path=\"%s\">\n<![CDATA[\n", relPath)
+	footer := "\n]]]]]]><![CDATA[><![CDATA[>\n</file>\n\n"
+
+	if _, err := io.WriteString(w, header); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(cleanContent)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, footer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f *XMLFormatter) Close(w io.Writer) error {
+	_, err := io.WriteString(w, "</project_context>")
+	return err
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/formatter/zip.go">
+<![CDATA[
+package formatter
+
+import (
+	"archive/zip"
+	"io"
+)
+
+type ZipFormatter struct {
+	zw *zip.Writer
+}
+
+func NewZip() *ZipFormatter { return &ZipFormatter{} }
+
+func (f *ZipFormatter) Name() string { return "zip" }
+
+func (f *ZipFormatter) Start(w io.Writer) error {
+	f.zw = zip.NewWriter(w)
+	return nil
+}
+
+func (f *ZipFormatter) WriteTree(w io.Writer, tree string) error {
+	wr, err := f.zw.Create("project_structure.txt")
+	if err != nil {
+		return err
+	}
+	_, err = wr.Write([]byte(tree))
+	return err
+}
+
+func (f *ZipFormatter) AddFile(w io.Writer, relPath string, content []byte) error {
+	fRel, err := f.zw.Create(relPath)
+	if err != nil {
+		return err
+	}
+	_, err = fRel.Write(content)
+	return err
+}
+
+func (f *ZipFormatter) Close(w io.Writer) error {
+	return f.zw.Close()
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/pricing/estimator.go">
+<![CDATA[
+package pricing
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Prices on 2025
+var models = map[string]float64{
+	// OpenAI
+	"gpt-4o":      2.50, // $2.50 / 1M input
+	"gpt-4o-mini": 0.15, // $0.15 / 1M input
+	"o1-preview":  15.00,
+	"o1-mini":     3.00,
+
+	// Anthropic
+	"claude-3-5-sonnet": 3.00,
+	"claude-3-opus":     15.00,
+	"claude-3-haiku":    0.25,
+
+	// Google
+	"gemini-1.5-pro":   3.50, // before 128K context length
+	"gemini-1.5-flash": 0.35,
+}
+
+// Estimate returns formatted price: "$0.0045"
+func Estimate(tokens int, modelName string) string {
+	pricePerMillion, exists := models[strings.ToLower(modelName)]
+	if !exists {
+		pricePerMillion = models["gpt-4o"]
+		return fmt.Sprintf("unknown model, assuming gpt-4o (~$%.4f)", calculate(tokens, pricePerMillion))
+	}
+
+	cost := calculate(tokens, pricePerMillion)
+	return fmt.Sprintf("$%.5f", cost)
+}
+
+func calculate(tokens int, pricePerMillion float64) float64 {
+	return (float64(tokens) / 1_000_000.0) * pricePerMillion
+}
+
+// ListModels return list of models
+func ListModels() string {
+	keys := make([]string, 0, len(models))
+	for k := range models {
+		keys = append(keys, k)
+	}
+	return strings.Join(keys, ", ")
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/security/scanner.go">
+<![CDATA[
+package security
+
+import (
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// regexes list
+var (
+	// AWS Access Key ID
+	reAWS = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
+	// OpenAI (sk-...)
+	reOpenAI = regexp.MustCompile(`\bsk-[a-zA-Z0-9]{20,}\b`)
+	// Private Key Headers
+	rePrivateKey = regexp.MustCompile(`-----BEGIN [A-Z]+ PRIVATE KEY-----`)
+)
+
+type Scanner struct {
+	Disabled bool
+}
+
+func New(disabled bool) *Scanner {
+	return &Scanner{Disabled: disabled}
+}
+
+func (s *Scanner) Scan(path string, content []byte) error {
+	if s.Disabled {
+		return nil
+	}
+
+	// 1. Filename Check
+	base := filepath.Base(path)
+	if isSensitiveFilename(base) {
+		return fmt.Errorf("sensitive filename detected: %s", base)
+	}
+
+	// 2. Content Check
+	if reAWS.Match(content) {
+		return fmt.Errorf("potential AWS Access Key detected")
+	}
+	if reOpenAI.Match(content) {
+		return fmt.Errorf("potential OpenAI Key detected")
+	}
+	if rePrivateKey.Match(content) {
+		return fmt.Errorf("private key header detected")
+	}
+
+	return nil
+}
+
+func isSensitiveFilename(name string) bool {
+	switch name {
+	case ".env", ".env.local", ".env.production", "id_rsa", "id_dsa", "id_ed25519":
+		return true
+	}
+
+	ext := filepath.Ext(name)
+	switch ext {
+	case ".pem", ".key", ".p12", ".pfx", ".kdbx":
+		return true
+	}
+
+	if strings.Contains(name, "_secret") || strings.Contains(name, "_token") {
+		// now empty, bcs dangerous
+	}
+
+	return false
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/skeleton/go_reducer.go">
+<![CDATA[
+package skeleton
+
+import (
+	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
+)
+
+func reduceGo(content []byte) ([]byte, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return nil, err // Або повернути content, якщо хочеш soft fail
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if fn, ok := n.(*ast.FuncDecl); ok {
+			if fn.Body != nil {
+				fn.Body.List = []ast.Stmt{
+					&ast.ExprStmt{
+						X: &ast.BasicLit{
+							Kind:  token.STRING,
+							Value: "`... implementation hidden ...`", // Or just comment
+						},
+					},
+				}
+			}
+		}
+		return true
+	})
+
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, node); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/skeleton/processor.go">
+<![CDATA[
+package skeleton
+
+import (
+	"path/filepath"
+)
+
+// Process strategy
+func Process(filename string, content []byte) ([]byte, error) {
+	ext := filepath.Ext(filename)
+
+	switch ext {
+	case ".go":
+		return reduceGo(content)
+	// In future .ts, .py, .java
+	default:
+		return content, nil
+	}
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/tokenizer/tokenizer.go">
+<![CDATA[
+package tokenizer
+
+import (
+	"github.com/pkoukk/tiktoken-go"
+)
+
+type TikToken struct {
+	tk *tiktoken.Tiktoken
+}
+
+func New() *TikToken {
+	// encoding GPT-4o / GPT-4
+	tk, _ := tiktoken.GetEncoding("cl100k_base")
+	return &TikToken{tk: tk}
+}
+
+func (t *TikToken) Count(text string) int {
+	if t.tk == nil {
+		return 0
+	}
+	return len(t.tk.Encode(text, nil, nil))
+}
+
+]]]]><![CDATA[>
+</file>
+
+<file path="internal/walker/fs_walker.go">
+<![CDATA[
+package walker
+
+import (
+	"io/fs"
+	"iter"
+	"os"
+	"path/filepath"
+
+	"github.com/monochromegane/go-gitignore"
+)
+
+type Ignorer interface {
+	Match(path string, isDir bool) bool
+}
+
+type noopIgnorer struct{}
+
+func (n noopIgnorer) Match(path string, isDir bool) bool { return false }
+
+type FSWalker struct {
+	inputs         []string
+	ignorePatterns []string
+}
+
+func New(inputs []string, ignorePatterns []string) (*FSWalker, error) {
+	return &FSWalker{
+		inputs:         inputs,
+		ignorePatterns: ignorePatterns,
+	}, nil
+}
+
+func (w *FSWalker) Walk() iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		for _, inputRoot := range w.inputs {
+			var ignoreMatcher Ignorer = noopIgnorer{}
+
+			info, err := os.Stat(inputRoot)
+			if err != nil {
+				if !yield(inputRoot, err) {
+					return
+				}
+				continue
+			}
+
+			if !info.IsDir() {
+				if !yield(inputRoot, nil) {
+					return
+				}
+				continue
+			}
+
+			gitIgnorePath := filepath.Join(inputRoot, ".gitignore")
+			if _, err := os.Stat(gitIgnorePath); err == nil {
+				if m, err := gitignore.NewGitIgnore(gitIgnorePath); err == nil {
+					ignoreMatcher = m
+				}
+			}
+
+			// scan
+			err = filepath.WalkDir(inputRoot, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				relPath, _ := filepath.Rel(inputRoot, path)
+				if relPath == "." {
+					return nil
+				}
+
+				isDir := d.IsDir()
+				name := d.Name()
+
+				for _, pattern := range w.ignorePatterns {
+					if name == pattern {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+					if matched, _ := filepath.Match(pattern, name); matched {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+				}
+
+				// 1. Hardcoded Security Filters
+				if isDir {
+					name := d.Name()
+					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" || name == "dist" || name == "build" {
+						return filepath.SkipDir
+					}
+				}
+
+				// 2. .gitignore Check
+				if ignoreMatcher.Match(relPath, isDir) {
+					if isDir {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				if isDir {
+					return nil
+				}
+
+				if !yield(path, nil) {
+					return filepath.SkipAll
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				// Log error logic if needed
+			}
+		}
+	}
+}
+
+]]]]><![CDATA[>
+</file>
+
+
+]]>
+</file>
+
+</project_context>

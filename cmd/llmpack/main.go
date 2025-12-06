@@ -13,6 +13,7 @@ import (
 var (
 	cfg         core.Config
 	profileName string
+	configPath  string
 )
 
 func hasStdinData() bool {
@@ -30,7 +31,7 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		fileCfg, err := config.Load()
+		fileCfg, err := config.Load(configPath)
 		if err != nil {
 			if !os.IsNotExist(err) && err.Error() != "config file not found" {
 				fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", err)
@@ -106,6 +107,7 @@ func main() {
 
 	rootCmd.Flags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
 	rootCmd.Flags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
+	rootCmd.Flags().StringVar(&configPath, "config", "", "Path to config file (default .llmpack.yaml)")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

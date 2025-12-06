@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -29,20 +30,30 @@ type FileConfig struct {
 	Ignore   []string            `yaml:"ignore"` // global ignore list
 }
 
-func Load() (*FileConfig, error) {
+func Load(customPath string) (*FileConfig, error) {
 	cfg := &FileConfig{
 		Global: Settings{
 			Format:       "xml",
 			IgnoreGit:    true,
 			SkeletonMode: false,
 			Tokens:       true,
+			ModelName:    "gpt-4o", // Default
 		},
 		Ignore:   DefaultIgnores,
 		Profiles: make(map[string]Settings),
 	}
 
-	// search file .llmpack.yaml
-	paths := []string{".llmpack.yaml"}
+	var paths []string
+
+	// Explicit path via flag
+	if customPath != "" {
+		paths = append(paths, customPath)
+	}
+
+	// Current Directory
+	paths = append(paths, ".llmpack.yaml")
+
+	// Home Directory
 	if home, err := os.UserHomeDir(); err == nil {
 		paths = append(paths, filepath.Join(home, ".llmpack.yaml"))
 	}
@@ -55,11 +66,14 @@ func Load() (*FileConfig, error) {
 		}
 	}
 
+	if customPath != "" && configPath != customPath {
+		return nil, fmt.Errorf("config file not found at %s", customPath)
+	}
+
 	if configPath == "" {
 		return cfg, nil
 	}
 
-	// read yaml
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
