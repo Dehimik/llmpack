@@ -33,6 +33,11 @@ func isBinary(content []byte) bool {
 	return false
 }
 
+func isPiped() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
 func Run(cfg core.Config) error {
 	// Setup Formatter
 	var fmtStrategy core.Formatter
@@ -85,6 +90,35 @@ func Run(cfg core.Config) error {
 	}
 
 	multiWriter := io.MultiWriter(writers...)
+
+	totalTokens := 0
+	filesProcessed := 0
+
+	if isPiped() {
+		fmt.Println("Reading from STDIN...")
+
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read stdin: %w", err)
+		}
+
+		if len(content) > 0 {
+			// Security Check
+			if err := secScanner.Scan("stdin_input", content); err != nil {
+				fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
+			} else {
+				if !isBinary(content) {
+					if cfg.CountTokens {
+						totalTokens += tk.Count(string(content))
+					}
+					if err := fmtStrategy.AddFile(multiWriter, "STDIN", content); err != nil {
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "Added content from STDIN (%d bytes)\n", len(content))
+				}
+			}
+		}
+	}
 
 	// get pretty path
 	getDisplayPath := func(originalPath string) string {
@@ -156,8 +190,6 @@ func Run(cfg core.Config) error {
 	}
 
 	// Process Content
-	totalTokens := 0
-	filesProcessed := 0
 
 	fmt.Printf("Packing %d files...\n", len(files))
 
@@ -167,15 +199,18 @@ func Run(cfg core.Config) error {
 			continue
 		}
 
+		// 1. Binary Check
 		if isBinary(content) {
 			continue
 		}
 
+		// 2. Security Check (До всього іншого)
 		if err := secScanner.Scan(path, content); err != nil {
 			fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
 			continue
 		}
 
+		// 3. Skeleton Mode (Модифікує content)
 		if cfg.SkeletonMode {
 			reduced, err := skeleton.Process(path, content)
 			if err != nil {
@@ -185,16 +220,13 @@ func Run(cfg core.Config) error {
 			}
 		}
 
+		// 4. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
 		if cfg.CountTokens {
 			totalTokens += tk.Count(string(content))
 		}
 
+		// 5. Write Output
 		display := displayPaths[i]
-
-		if cfg.CountTokens {
-			totalTokens += tk.Count(string(content))
-		}
-
 		if err := fmtStrategy.AddFile(multiWriter, display, content); err != nil {
 			return err
 		}

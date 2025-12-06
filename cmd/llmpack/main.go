@@ -15,10 +15,20 @@ var (
 	profileName string
 )
 
+func hasStdinData() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "llmpack [path]",
 	Short: "Pack your code into LLM-friendly context",
-	Args:  cobra.MinimumNArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 && !hasStdinData() {
+			return fmt.Errorf("requires at least 1 arg OR data from stdin")
+		}
+		return nil
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		fileCfg, err := config.Load()
 		if err != nil {
