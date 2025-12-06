@@ -1,0 +1,13 @@
+global:
+  format: markdown
+  skeleton: false
+
+profiles:
+  backend:
+    format: xml
+    skeleton: true
+
+ignore:
+  - ".git"
+  - "node_modules"
+  - "images"

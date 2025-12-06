@@ -18,12 +18,14 @@ type noopIgnorer struct{}
 func (n noopIgnorer) Match(path string, isDir bool) bool { return false }
 
 type FSWalker struct {
-	inputs []string
+	inputs         []string
+	ignorePatterns []string
 }
 
-func New(inputs []string) (*FSWalker, error) {
+func New(inputs []string, ignorePatterns []string) (*FSWalker, error) {
 	return &FSWalker{
-		inputs: inputs,
+		inputs:         inputs,
+		ignorePatterns: ignorePatterns,
 	}, nil
 }
 
@@ -66,6 +68,22 @@ func (w *FSWalker) Walk() iter.Seq2[string, error] {
 				}
 
 				isDir := d.IsDir()
+				name := d.Name()
+
+				for _, pattern := range w.ignorePatterns {
+					if name == pattern {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+					if matched, _ := filepath.Match(pattern, name); matched {
+						if isDir {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+				}
 
 				// 1. Hardcoded Security Filters
 				if isDir {

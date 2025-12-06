@@ -33,4 +33,8 @@ type Config struct {
 	CountTokens     bool
 	CopyToClipboard bool
 	NoTree          bool
+	SkeletonMode    bool
+	IgnorePatterns  []string
+	DisableSecurity bool
+	ModelName       string
 }
