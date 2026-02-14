@@ -17,3 +17,8 @@ const (
 	MethodQ6K   = "q6_k"
 	MethodQ80   = "q8_0"
 )
+
+const CalibrationDatasetURL = "WORKING_URL_TO_CALIBRATION_DATASET"
+
+// Good choice is wikitrain-2-raw, wikitrain-103 is too big
+const CalibrationFileName = "wiki.train.raw"
