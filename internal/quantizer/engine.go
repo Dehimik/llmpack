@@ -38,6 +38,24 @@ func (e *Engine) Convert(modelPath, outputFile string) error {
 	return cmd.Run()
 }
 
+// Generates Imatrix file
+func (e *Engine) CalculateImatrix(modelF16, dataFile, outputImatrix string) error {
+	binPath := e.findBinary("llama-imatrix")
+	if binPath == "" {
+		return fmt.Errorf("binary llama-imatrix not found")
+	}
+
+	// -c 512 context size for calibration
+	// you can add -ngl 99 if want speed up on gpu
+	cmd := exec.Command(binPath, "-m", modelF16, "-f", dataFile, "-o", outputImatrix, "-c", "512")
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	fmt.Println("Calculating Importance Matrix (this may take a while)...")
+	return cmd.Run()
+}
+
 // Quantize GGUF FP16 to GGUF Quantized
 func (e *Engine) Quantize(inputGGUF, outputGGUF, method, imatrixPath string) error {
 	binPath := e.findBinary("llama-quantize")
