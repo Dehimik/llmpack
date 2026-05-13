@@ -11,7 +11,10 @@ func Process(filename string, content []byte) ([]byte, error) {
 	switch ext {
 	case ".go":
 		return reduceGo(content)
-	// In future .ts, .py, .java
+	case ".py":
+		return reduceIndentation(content), nil
+	case ".js", ".ts", ".tsx", ".jsx", ".java", ".cpp", ".c", ".h", ".hpp", ".cs", ".rs", ".php", ".swift", ".kt", ".dart", ".scala":
+		return reduceBraces(content), nil
 	default:
 		return content, nil
 	}
