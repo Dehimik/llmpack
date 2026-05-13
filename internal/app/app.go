@@ -258,6 +258,9 @@ func Run(cfg core.Config) error {
 		// 3. Handle --symbols mode
 		if cfg.SymbolsOnly {
 			symbols, _ := skeleton.ExtractSymbols(path, content)
+			if len(symbols) == 0 {
+				continue // Skip files with no symbols in symbols-only mode
+			}
 			var symBuf bytes.Buffer
 			symBuf.WriteString("Symbols in this file:\n")
 			for _, s := range symbols {
