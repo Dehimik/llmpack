@@ -2,4 +2,5 @@
 releases
 conductor/*
 output/*
-/llmpack
+llmpack
+docs/*
