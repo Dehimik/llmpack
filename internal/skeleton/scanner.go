@@ -37,8 +37,15 @@ func scanBraces(content []byte) []Block {
 				if !inString {
 					inString = true
 					stringChar = c
-				} else if stringChar == c && (i == 0 || line[i-1] != '\\') {
-					inString = false
+				} else if stringChar == c {
+					// Count backslashes before the quote to handle escaping correctly
+					backslashes := 0
+					for j := i - 1; j >= 0 && line[j] == '\\'; j-- {
+						backslashes++
+					}
+					if backslashes%2 == 0 {
+						inString = false
+					}
 				}
 			}
 			
@@ -92,13 +99,13 @@ func scanIndentation(content []byte) []Block {
 	var stack []openBlock
 	
 	for lineIdx, line := range lines {
-		if strings.TrimSpace(line) == "" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 		
 		lineNum := lineIdx + 1
 		indent := getIndent(line)
-		trimmed := strings.TrimSpace(line)
 		
 		// Close blocks if current indent is less than or equal to stack top
 		for len(stack) > 0 && indent <= stack[len(stack)-1].indent {

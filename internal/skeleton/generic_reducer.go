@@ -7,22 +7,18 @@ import (
 
 // reduceBraces strips function/class bodies in brace-based languages (JS, TS, Java, etc.)
 func reduceBraces(content []byte) []byte {
-	blocks := scanBraces(content)
-	if len(blocks) == 0 {
+	symbols, _ := extractBraceSymbols(content)
+	if len(symbols) == 0 {
 		return content
 	}
 
 	lines := strings.Split(string(content), "\n")
 	var buf bytes.Buffer
 
-	// We want to hide bodies of top-level blocks (Level 1)
-	// But wait, if it's a class, we might want to keep its members but hide their bodies.
-	// The previous implementation was hiding everything inside the first { } it found.
-	
 	hideRanges := make(map[int]int) // startLine -> endLine
-	for _, b := range blocks {
-		if b.Level == 1 {
-			hideRanges[b.StartLine] = b.EndLine
+	for _, s := range symbols {
+		if s.Type == "function" || s.Type == "method" {
+			hideRanges[s.StartLine] = s.EndLine
 		}
 	}
 
@@ -57,8 +53,8 @@ func reduceBraces(content []byte) []byte {
 
 // reduceIndentation strips function/class bodies in indentation-based languages (Python)
 func reduceIndentation(content []byte) []byte {
-	blocks := scanIndentation(content)
-	if len(blocks) == 0 {
+	symbols, _ := extractIndentationSymbols(content)
+	if len(symbols) == 0 {
 		return content
 	}
 
@@ -66,9 +62,9 @@ func reduceIndentation(content []byte) []byte {
 	var buf bytes.Buffer
 
 	hideRanges := make(map[int]int)
-	for _, b := range blocks {
-		if b.Level == 1 {
-			hideRanges[b.StartLine] = b.EndLine
+	for _, s := range symbols {
+		if s.Type == "function" || s.Type == "method" {
+			hideRanges[s.StartLine] = s.EndLine
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -111,13 +112,9 @@ func extractIndentationSymbols(content []byte) ([]Symbol, error) {
 		}
 	}
 	// Sort by start line so we can find parents easily
-	for i := 0; i < len(symbols); i++ {
-		for j := i + 1; j < len(symbols); j++ {
-			if symbols[i].StartLine > symbols[j].StartLine {
-				symbols[i], symbols[j] = symbols[j], symbols[i]
-			}
-		}
-	}
+	sort.Slice(symbols, func(i, j int) bool {
+		return symbols[i].StartLine < symbols[j].StartLine
+	})
 	// Find parents
 	for i := range symbols {
 		for j := i - 1; j >= 0; j-- {
@@ -128,6 +125,14 @@ func extractIndentationSymbols(content []byte) ([]Symbol, error) {
 		}
 	}
 	return symbols, nil
+}
+
+var brKeywords = map[string]bool{
+	"if":     true,
+	"for":    true,
+	"while":  true,
+	"switch": true,
+	"catch":  true,
 }
 
 func extractBraceSymbols(content []byte) ([]Symbol, error) {
@@ -148,6 +153,9 @@ func extractBraceSymbols(content []byte) ([]Symbol, error) {
 		} else if matches := brMethRegex.FindStringSubmatch(line); len(matches) > 1 {
 			name = matches[1]
 			symType = "method"
+			if brKeywords[name] {
+				name = ""
+			}
 		}
 		
 		if name != "" {
@@ -160,13 +168,9 @@ func extractBraceSymbols(content []byte) ([]Symbol, error) {
 		}
 	}
 	// Sort by start line so we can find parents easily
-	for i := 0; i < len(symbols); i++ {
-		for j := i + 1; j < len(symbols); j++ {
-			if symbols[i].StartLine > symbols[j].StartLine {
-				symbols[i], symbols[j] = symbols[j], symbols[i]
-			}
-		}
-	}
+	sort.Slice(symbols, func(i, j int) bool {
+		return symbols[i].StartLine < symbols[j].StartLine
+	})
 	// Find parents
 	for i := range symbols {
 		for j := i - 1; j >= 0; j-- {
