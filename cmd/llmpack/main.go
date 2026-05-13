@@ -14,6 +14,7 @@ var (
 	cfg         core.Config
 	profileName string
 	configPath  string
+	appRun      = app.Run
 )
 
 func hasStdinData() bool {
@@ -30,7 +31,7 @@ var rootCmd = &cobra.Command{
 		}
 		return nil
 	},
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		fileCfg, err := config.Load(configPath)
 		if err != nil {
 			if !os.IsNotExist(err) && err.Error() != "config file not found" {
@@ -72,6 +73,11 @@ var rootCmd = &cobra.Command{
 		if !cmd.Flags().Changed("no-tree") {
 			cfg.NoTree = settings.NoTree
 		}
+
+		if cfg.SymbolsOnly && cfg.Implementation != "" {
+			return fmt.Errorf("--symbols and --implementation cannot both be set")
+		}
+		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg.InputPaths = args
@@ -86,14 +92,14 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if err := app.Run(cfg); err != nil {
+		if err := appRun(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	},
 }
 
-func main() {
+func setupFlags() {
 	rootCmd.Flags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
 	rootCmd.Flags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
 
@@ -108,6 +114,15 @@ func main() {
 	rootCmd.Flags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
 	rootCmd.Flags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
 	rootCmd.Flags().StringVar(&configPath, "config", "", "Path to config file (default .llmpack.yaml)")
+
+	rootCmd.Flags().BoolVar(&cfg.SymbolsOnly, "symbols", false, "List all symbols in AI-friendly format")
+	rootCmd.Flags().StringVar(&cfg.Implementation, "implementation", "", "Extract full implementation of a symbol")
+	rootCmd.Flags().StringVar(&cfg.FindSymbol, "find", "", "Find files containing a specific symbol")
+	rootCmd.Flags().BoolVar(&cfg.Focus, "focus", false, "In find mode, return only the symbol implementation + skeleton")
+}
+
+func main() {
+	setupFlags()
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

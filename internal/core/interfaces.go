@@ -37,4 +37,8 @@ type Config struct {
 	IgnorePatterns  []string
 	DisableSecurity bool
 	ModelName       string
+	SymbolsOnly     bool
+	Implementation  string
+	FindSymbol      string
+	Focus           bool
 }
