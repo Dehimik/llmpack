@@ -88,7 +88,7 @@ class MyClass {
     }
 }
 `)
-	reduced := string(reduceBraces(content))
+	reduced := string(reduceBraces(content, ""))
 	if !strings.Contains(reduced, "method1()") {
 		t.Errorf("Class skeleton should contain method1(), but got:\n%s", reduced)
 	}

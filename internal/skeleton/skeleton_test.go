@@ -17,7 +17,7 @@ class MyClass {
     }
 }
 `
-	output := reduceBraces([]byte(input))
+	output := reduceBraces([]byte(input), "")
 	if !bytes.Contains(output, []byte("`... implementation hidden ...`")) {
 		t.Errorf("Expected placeholder in output, got:\n%s", string(output))
 	}
@@ -36,7 +36,7 @@ class MyClass:
     def method(self):
         pass
 `
-	output := reduceIndentation([]byte(input))
+	output := reduceIndentation([]byte(input), "")
 	if !bytes.Contains(output, []byte("/* ... implementation hidden ... */")) {
 		t.Errorf("Expected placeholder in output, got:\n%s", string(output))
 	}
@@ -65,5 +65,29 @@ func TestProcess(t *testing.T) {
 	out, _ = Process("test.ts", []byte(tsCode))
 	if !bytes.Contains(out, []byte("`... implementation hidden ...`")) {
 		t.Errorf("TypeScript skeletonization failed")
+	}
+}
+
+func TestProcessSpecific(t *testing.T) {
+	pyCode := `
+def func1():
+    print("one")
+
+def func2():
+    print("two")
+`
+	// Target func1
+	out, _ := ProcessSpecific("test.py", []byte(pyCode), "func1")
+	if !bytes.Contains(out, []byte("print(\"one\")")) {
+		t.Errorf("Target symbol func1 body was hidden")
+	}
+	if !bytes.Contains(out, []byte("/* ... implementation hidden ... */")) {
+		t.Errorf("Other symbols were not skeletonized")
+	}
+
+	// Target func2
+	out, _ = ProcessSpecific("test.py", []byte(pyCode), "func2")
+	if !bytes.Contains(out, []byte("print(\"two\")")) {
+		t.Errorf("Target symbol func2 body was hidden")
 	}
 }

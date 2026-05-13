@@ -6,7 +6,7 @@ import (
 )
 
 // reduceBraces strips function/class bodies in brace-based languages (JS, TS, Java, etc.)
-func reduceBraces(content []byte) []byte {
+func reduceBraces(content []byte, targetSymbol string) []byte {
 	symbols, _ := extractBraceSymbols(content)
 	if len(symbols) == 0 {
 		return content
@@ -18,6 +18,14 @@ func reduceBraces(content []byte) []byte {
 	hideRanges := make(map[int]int) // startLine -> endLine
 	for _, s := range symbols {
 		if s.Type == "function" || s.Type == "method" {
+			qualifiedName := s.Name
+			if s.Parent != "" {
+				qualifiedName = s.Parent + "." + s.Name
+			}
+
+			if targetSymbol != "" && (s.Name == targetSymbol || qualifiedName == targetSymbol) {
+				continue // Preserve
+			}
 			hideRanges[s.StartLine] = s.EndLine
 		}
 	}
@@ -52,7 +60,7 @@ func reduceBraces(content []byte) []byte {
 }
 
 // reduceIndentation strips function/class bodies in indentation-based languages (Python)
-func reduceIndentation(content []byte) []byte {
+func reduceIndentation(content []byte, targetSymbol string) []byte {
 	symbols, _ := extractIndentationSymbols(content)
 	if len(symbols) == 0 {
 		return content
@@ -64,6 +72,14 @@ func reduceIndentation(content []byte) []byte {
 	hideRanges := make(map[int]int)
 	for _, s := range symbols {
 		if s.Type == "function" || s.Type == "method" {
+			qualifiedName := s.Name
+			if s.Parent != "" {
+				qualifiedName = s.Parent + "." + s.Name
+			}
+
+			if targetSymbol != "" && (s.Name == targetSymbol || qualifiedName == targetSymbol) {
+				continue // Preserve
+			}
 			hideRanges[s.StartLine] = s.EndLine
 		}
 	}
