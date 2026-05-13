@@ -16,26 +16,39 @@ Designed for developers who are tired of manually copying and pasting files or s
 
 ## 📦 Installation
 
-### Option 1: Go Install (Recommended)
+### Option 1: Using Makefile (Recommended)
 
-If you have Go (1.23+) installed:
-
-```bash
-go install github.com/dehimik/llmpack/cmd/llmpack@latest
-````
-
-### Option 2: Build from Source
+If you have Go (1.23+) and `make` installed:
 
 ```bash
 git clone https://github.com/dehimik/llmpack.git
 cd llmpack
-go build -o llmpack cmd/llmpack/main.go
+make install
+```
+This builds the binary and moves it to `/usr/local/bin/`.
 
-# Optional: Move to system path
-sudo mv llmpack /usr/local/bin/
+### Option 2: Go Install
+
+```bash
+go install github.com/dehimik/llmpack/cmd/llmpack@latest
 ```
 
 ## 🛠 Usage
+
+### Semantic Features (New!)
+
+*   **List Symbols:** Get a compact index of all functions, classes, and methods. Great for high-level project overview.
+    ```bash
+    llmpack . --symbols
+    ```
+*   **Extract Implementation:** Show full code for a specific function/method and skeletonize everything else in that file.
+    ```bash
+    llmpack . --implementation MyFunction
+    ```
+*   **Smart Search & Focus:** Find all files containing a symbol and return them in skeleton mode with that symbol's body expanded.
+    ```bash
+    llmpack . --find MyMethod --focus
+    ```
 
 ### Basic Usage
 

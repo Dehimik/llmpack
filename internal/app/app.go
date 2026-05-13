@@ -164,6 +164,48 @@ func Run(cfg core.Config) error {
 		headerContent = strings.Join(displayPaths, "\n")
 	}
 
+	// Filter by symbol if --find is specified
+	if cfg.FindSymbol != "" {
+		fmt.Printf("Searching for symbol '%s'...\n", cfg.FindSymbol)
+		var filteredFiles []string
+		var filteredDisplayPaths []string
+
+		for i, path := range files {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			if isBinary(content) {
+				continue
+			}
+
+			symbols, _ := skeleton.ExtractSymbols(path, content)
+			found := false
+			for _, s := range symbols {
+				qualified := s.Name
+				if s.Parent != "" {
+					qualified = s.Parent + "." + s.Name
+				}
+				if s.Name == cfg.FindSymbol || qualified == cfg.FindSymbol {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				filteredFiles = append(filteredFiles, path)
+				filteredDisplayPaths = append(filteredDisplayPaths, displayPaths[i])
+			}
+		}
+		files = filteredFiles
+		displayPaths = filteredDisplayPaths
+
+		// Update header content if we filtered
+		if cfg.Format != "tree" {
+			headerContent = strings.Join(displayPaths, "\n")
+		}
+	}
+
 	// write header / start
 	if err := fmtStrategy.Start(multiWriter); err != nil {
 		return err
@@ -211,23 +253,57 @@ func Run(cfg core.Config) error {
 			continue
 		}
 
-		// 3. Skeleton Mode (Модифікує content)
-		if cfg.SkeletonMode {
-			reduced, err := skeleton.Process(path, content)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
-			} else {
-				content = reduced
+		display := displayPaths[i]
+
+		// 3. Handle --symbols mode
+		if cfg.SymbolsOnly {
+			symbols, _ := skeleton.ExtractSymbols(path, content)
+			if len(symbols) == 0 {
+				continue // Skip files with no symbols in symbols-only mode
+			}
+			var symBuf bytes.Buffer
+			symBuf.WriteString("Symbols in this file:\n")
+			for _, s := range symbols {
+				scope := ""
+				if s.Parent != "" {
+					scope = " scope=\"" + s.Parent + "\""
+				}
+				fmt.Fprintf(&symBuf, "  <symbol name=\"%s\" type=\"%s\"%s lines=\"%d-%d\" />\n", s.Name, s.Type, scope, s.StartLine, s.EndLine)
+			}
+			content = symBuf.Bytes()
+		} else {
+			// 4. Targeted Implementation Extraction (Focus)
+			target := ""
+			if cfg.Implementation != "" {
+				target = cfg.Implementation
+			} else if cfg.FindSymbol != "" && cfg.Focus {
+				target = cfg.FindSymbol
+			}
+
+			if target != "" {
+				reduced, err := skeleton.ProcessSpecific(path, content, target)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to focus on %s in %s: %v\n", target, path, err)
+				} else {
+					content = reduced
+				}
+			} else if cfg.SkeletonMode {
+				// 5. Standard Skeleton Mode
+				reduced, err := skeleton.Process(path, content)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
+				} else {
+					content = reduced
+				}
 			}
 		}
 
-		// 4. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
+		// 6. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
 		if cfg.CountTokens {
 			totalTokens += tk.Count(string(content))
 		}
 
-		// 5. Write Output
-		display := displayPaths[i]
+		// 7. Write Output
 		if err := fmtStrategy.AddFile(multiWriter, display, content); err != nil {
 			return err
 		}
