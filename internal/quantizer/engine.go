@@ -15,11 +15,20 @@ type Engine struct {
 
 func NewEngine(llamaPath string) (*Engine, error) {
 	if _, err := os.Stat(llamaPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("llama path %s does not exist", llamaPath)
+		return nil, fmt.Errorf("path not found: %s", llamaPath)
 	}
+
+	venvPython := filepath.Join(llamaPath, "venv", "bin", "python")
+	pythonBin := "python3"
+
+	if _, err := os.Stat(venvPython); err == nil {
+		fmt.Println("Using venv python:", venvPython)
+		pythonBin = venvPython
+	}
+
 	return &Engine{
 		LLamaPath: llamaPath,
-		PythonBin: "python3", // On Arch always python3
+		PythonBin: pythonBin,
 	}, nil
 }
 

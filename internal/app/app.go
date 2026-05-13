@@ -69,7 +69,9 @@ func Run(cfg core.Config) error {
 	// Output Destination Logic
 	var writers []io.Writer
 
-	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+	if cfg.CustomWriter != nil {
+		writers = append(writers, cfg.CustomWriter)
+	} else if cfg.OutputPath != "" && cfg.OutputPath != "-" {
 		f, err := os.Create(cfg.OutputPath)
 		if err != nil {
 			return err
