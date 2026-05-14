@@ -35,7 +35,10 @@ func isBinary(content []byte) bool {
 }
 
 func isPiped() bool {
-	stat, _ := os.Stdin.Stat()
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
 	return (stat.Mode() & os.ModeCharDevice) == 0
 }
 
@@ -103,8 +106,9 @@ func Run(cfg core.Config) error {
 	totalTokens := 0
 	filesProcessed := 0
 
-	if isPiped() {
-		fmt.Println("Reading from STDIN...")
+	// 0. Security/Safety: ONLY read from STDIN if explicitly allowed and piped
+	if !cfg.NoStdin && isPiped() {
+		fmt.Fprintln(logWriter, "Reading from STDIN...")
 
 		content, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -146,7 +150,7 @@ func Run(cfg core.Config) error {
 	var files []string
 	var displayPaths []string
 
-	fmt.Println("Scanning files...")
+	fmt.Fprintln(logWriter, "Scanning files...")
 
 	for path, err := range wk.Walk() {
 		if err != nil {
@@ -174,7 +178,7 @@ func Run(cfg core.Config) error {
 
 	// Filter by symbol if --find is specified
 	if cfg.FindSymbol != "" {
-		fmt.Printf("Searching for symbol '%s'...\n", cfg.FindSymbol)
+		fmt.Fprintf(logWriter, "Searching for symbol '%s'...\n", cfg.FindSymbol)
 		var filteredFiles []string
 		var filteredDisplayPaths []string
 
@@ -229,7 +233,7 @@ func Run(cfg core.Config) error {
 
 	// Optimization: Exit if tree-only mode
 	if cfg.Format == "tree" {
-		fmt.Println("Tree generated.")
+		fmt.Fprintln(logWriter, "Tree generated.")
 		if cfg.CopyToClipboard && clipboardBuf != nil {
 			if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
 				fmt.Fprintf(logWriter, "Failed to copy to clipboard: %v\n", err)
@@ -242,7 +246,7 @@ func Run(cfg core.Config) error {
 
 	// Process Content
 
-	fmt.Printf("Packing %d files...\n", len(files))
+	fmt.Fprintf(logWriter, "Packing %d files...\n", len(files))
 
 	for i, path := range files {
 		content, err := os.ReadFile(path)

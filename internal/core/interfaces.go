@@ -45,5 +45,6 @@ type Config struct {
 
 	CustomWriter io.Writer // For MCP or other programmatic uses
 	LogWriter    io.Writer // For capturing stderr/logs
+	NoStdin      bool      // Disable reading from STDIN even if piped
 }
 
