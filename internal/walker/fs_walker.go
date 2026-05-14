@@ -91,6 +91,12 @@ func (w *FSWalker) Walk() iter.Seq2[string, error] {
 					if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" || name == "dist" || name == "build" {
 						return filepath.SkipDir
 					}
+				} else {
+					// Ignore common output context files to avoid loops
+					name := d.Name()
+					if name == "context.md" || name == "context.xml" || name == "context.zip" || name == "llmpack" {
+						return nil
+					}
 				}
 
 				// 2. .gitignore Check

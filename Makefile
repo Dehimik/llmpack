@@ -1,6 +1,6 @@
 BINARY_NAME=llmpack
 INSTALL_PATH=/usr/local/bin
-ENTRY_POINT=cmd/llmpack/main.go
+ENTRY_POINT=./cmd/llmpack
 
 .PHONY: all build install clean uninstall
 

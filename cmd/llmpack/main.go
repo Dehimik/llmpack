@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/dehimik/llmpack/internal/app"
 	"github.com/dehimik/llmpack/internal/config"
@@ -23,14 +24,8 @@ func hasStdinData() bool {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "llmpack [path]",
+	Use:   "llmpack",
 	Short: "Pack your code into LLM-friendly context",
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 1 && !hasStdinData() {
-			return fmt.Errorf("requires at least 1 arg OR data from stdin")
-		}
-		return nil
-	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		fileCfg, err := config.Load(configPath)
 		if err != nil {
@@ -79,50 +74,83 @@ var rootCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+var packCmd = &cobra.Command{
+	Use:   "pack [path]",
+	Short: "Pack files into context (default)",
+	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg.InputPaths = args
-
-		if cfg.OutputPath == "" && !cfg.CopyToClipboard {
-			if cfg.Format == "markdown" || cfg.Format == "md" {
-				cfg.OutputPath = "context.md"
-			} else if cfg.Format == "zip" {
-				cfg.OutputPath = "context.zip"
-			} else {
-				cfg.OutputPath = "context.xml"
-			}
-		}
-
-		if err := appRun(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+		packRun(cmd, args)
 	},
 }
 
+func packRun(cmd *cobra.Command, args []string) {
+	if len(args) == 0 && !hasStdinData() {
+		_ = cmd.Help()
+		return
+	}
+
+	cfg.InputPaths = args
+
+	if cfg.OutputPath == "" && !cfg.CopyToClipboard && len(args) > 0 {
+		if cfg.Format == "markdown" || cfg.Format == "md" {
+			cfg.OutputPath = "context.md"
+		} else if cfg.Format == "zip" {
+			cfg.OutputPath = "context.zip"
+		} else {
+			cfg.OutputPath = "context.xml"
+		}
+	}
+
+	if err := appRun(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func setupFlags() {
-	rootCmd.Flags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
-	rootCmd.Flags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
+	// Flags are now persistent so they apply to both 'pack' and 'root' (and thus subcommands)
+	rootCmd.PersistentFlags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
+	rootCmd.PersistentFlags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
 
-	rootCmd.Flags().BoolVar(&cfg.IgnoreGit, "ignore-git", true, "Use .gitignore")
-	rootCmd.Flags().BoolVar(&cfg.CountTokens, "tokens", true, "Count tokens")
-	rootCmd.Flags().StringVarP(&cfg.ModelName, "model", "m", "gpt-4o", "Model for cost estimation (gpt-4o, claude-3-5-sonnet, etc.)")
+	rootCmd.PersistentFlags().BoolVar(&cfg.IgnoreGit, "ignore-git", true, "Use .gitignore")
+	rootCmd.PersistentFlags().BoolVar(&cfg.CountTokens, "tokens", true, "Count tokens")
+	rootCmd.PersistentFlags().StringVarP(&cfg.ModelName, "model", "m", "gpt-4o", "Model for cost estimation (gpt-4o, claude-3-5-sonnet, etc.)")
 
-	rootCmd.Flags().BoolVar(&cfg.NoTree, "no-tree", false, "Disable file tree in output header")
-	rootCmd.Flags().BoolVarP(&cfg.CopyToClipboard, "clipboard", "c", false, "Copy output to clipboard")
-	rootCmd.Flags().BoolVar(&cfg.DisableSecurity, "no-security", false, "Disable security checks (secrets detection)")
+	rootCmd.PersistentFlags().BoolVar(&cfg.NoTree, "no-tree", false, "Disable file tree in output header")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.CopyToClipboard, "clipboard", "c", false, "Copy output to clipboard")
+	rootCmd.PersistentFlags().BoolVar(&cfg.DisableSecurity, "no-security", false, "Disable security checks (secrets detection)")
 
-	rootCmd.Flags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
-	rootCmd.Flags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
-	rootCmd.Flags().StringVar(&configPath, "config", "", "Path to config file (default .llmpack.yaml)")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.SkeletonMode, "skeleton", "s", false, "Strip function bodies (skeleton mode)")
+	rootCmd.PersistentFlags().StringVarP(&profileName, "profile", "p", "", "Configuration profile to use (defined in .llmpack.yaml)")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file (default .llmpack.yaml)")
 
-	rootCmd.Flags().BoolVar(&cfg.SymbolsOnly, "symbols", false, "List all symbols in AI-friendly format")
-	rootCmd.Flags().StringVar(&cfg.Implementation, "implementation", "", "Extract full implementation of a symbol")
-	rootCmd.Flags().StringVar(&cfg.FindSymbol, "find", "", "Find files containing a specific symbol")
-	rootCmd.Flags().BoolVar(&cfg.Focus, "focus", false, "In find mode, return only the symbol implementation + skeleton")
+	rootCmd.PersistentFlags().BoolVar(&cfg.SymbolsOnly, "symbols", false, "List all symbols in AI-friendly format")
+	rootCmd.PersistentFlags().StringVar(&cfg.Implementation, "implementation", "", "Extract full implementation of a symbol")
+	rootCmd.PersistentFlags().StringVar(&cfg.FindSymbol, "find", "", "Find files containing a specific symbol")
+	rootCmd.PersistentFlags().BoolVar(&cfg.Focus, "focus", false, "In find mode, return only the symbol implementation + skeleton")
 }
 
 func main() {
 	setupFlags()
+	rootCmd.AddCommand(packCmd)
+
+	// If no args or first arg is not a command, default to 'pack'
+	if len(os.Args) > 1 {
+		found := false
+		cmdName := os.Args[1]
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == cmdName || c.HasAlias(cmdName) {
+				found = true
+				break
+			}
+		}
+		// If it's a flag, it's also for the root/pack
+		if !found && !strings.HasPrefix(cmdName, "-") {
+			os.Args = append([]string{os.Args[0], "pack"}, os.Args[1:]...)
+		}
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

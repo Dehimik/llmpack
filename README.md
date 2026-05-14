@@ -54,9 +54,13 @@ go install github.com/dehimik/llmpack/cmd/llmpack@latest
 
 Reduces token usage by **up to 80%** by hiding implementation details while keeping the architecture visible.
 
-```bash
-llmpack . --skeleton
-```
+### Features exposed via MCP:
+- `list_symbols`: Browse project architecture without loading full files.
+- `get_code`: Pull specific implementation of a function/class.
+- `search`: Find where a symbol is defined and see its code.
+- `scan_security`: Run a security audit for secrets and sensitive files.
+- `estimate_cost`: Calculate token usage and pricing for the project.
+- `get_tree`: Generate a visual directory structure.
 
 ### AI Agents & MCP Support 🤖
 
