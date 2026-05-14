@@ -58,6 +58,9 @@ LLMPack supports the **Model Context Protocol (MCP)**, allowing you to use it as
 - `list_symbols`: Browse project architecture without loading full files.
 - `get_code`: Pull specific implementation of a function/class.
 - `search`: Find where a symbol is defined and see its code.
+- `scan_security`: Run a security audit for secrets and sensitive files.
+- `estimate_cost`: Calculate token usage and pricing for the project.
+- `get_tree`: Generate a visual directory structure.
 
 ### Installation for Claude Desktop
 
