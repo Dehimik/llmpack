@@ -40,6 +40,12 @@ func isPiped() bool {
 }
 
 func Run(cfg core.Config) error {
+	// Setup Log Writer
+	logWriter := io.Writer(os.Stderr)
+	if cfg.LogWriter != nil {
+		logWriter = cfg.LogWriter
+	}
+
 	// Setup Formatter
 	var fmtStrategy core.Formatter
 	secScanner := security.New(cfg.DisableSecurity)
@@ -69,7 +75,9 @@ func Run(cfg core.Config) error {
 	// Output Destination Logic
 	var writers []io.Writer
 
-	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
+	if cfg.CustomWriter != nil {
+		writers = append(writers, cfg.CustomWriter)
+	} else if cfg.OutputPath != "" && cfg.OutputPath != "-" {
 		f, err := os.Create(cfg.OutputPath)
 		if err != nil {
 			return err
@@ -106,7 +114,7 @@ func Run(cfg core.Config) error {
 		if len(content) > 0 {
 			// Security Check
 			if err := secScanner.Scan("stdin_input", content); err != nil {
-				fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
+				fmt.Fprintf(logWriter, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
 			} else {
 				if !isBinary(content) {
 					if cfg.CountTokens {
@@ -115,7 +123,7 @@ func Run(cfg core.Config) error {
 					if err := fmtStrategy.AddFile(multiWriter, "STDIN", content); err != nil {
 						return err
 					}
-					fmt.Fprintf(os.Stderr, "Added content from STDIN (%d bytes)\n", len(content))
+					fmt.Fprintf(logWriter, "Added content from STDIN (%d bytes)\n", len(content))
 				}
 			}
 		}
@@ -142,7 +150,7 @@ func Run(cfg core.Config) error {
 
 	for path, err := range wk.Walk() {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error accessing %s: %v\n", path, err)
+			fmt.Fprintf(logWriter, "Error accessing %s: %v\n", path, err)
 			continue
 		}
 
@@ -164,6 +172,48 @@ func Run(cfg core.Config) error {
 		headerContent = strings.Join(displayPaths, "\n")
 	}
 
+	// Filter by symbol if --find is specified
+	if cfg.FindSymbol != "" {
+		fmt.Printf("Searching for symbol '%s'...\n", cfg.FindSymbol)
+		var filteredFiles []string
+		var filteredDisplayPaths []string
+
+		for i, path := range files {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			if isBinary(content) {
+				continue
+			}
+
+			symbols, _ := skeleton.ExtractSymbols(path, content)
+			found := false
+			for _, s := range symbols {
+				qualified := s.Name
+				if s.Parent != "" {
+					qualified = s.Parent + "." + s.Name
+				}
+				if s.Name == cfg.FindSymbol || qualified == cfg.FindSymbol {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				filteredFiles = append(filteredFiles, path)
+				filteredDisplayPaths = append(filteredDisplayPaths, displayPaths[i])
+			}
+		}
+		files = filteredFiles
+		displayPaths = filteredDisplayPaths
+
+		// Update header content if we filtered
+		if cfg.Format != "tree" {
+			headerContent = strings.Join(displayPaths, "\n")
+		}
+	}
+
 	// write header / start
 	if err := fmtStrategy.Start(multiWriter); err != nil {
 		return err
@@ -182,9 +232,9 @@ func Run(cfg core.Config) error {
 		fmt.Println("Tree generated.")
 		if cfg.CopyToClipboard && clipboardBuf != nil {
 			if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy to clipboard: %v\n", err)
+				fmt.Fprintf(logWriter, "Failed to copy to clipboard: %v\n", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "Copied to clipboard!\n")
+				fmt.Fprintf(logWriter, "Copied to clipboard!\n")
 			}
 		}
 		return nil
@@ -207,27 +257,61 @@ func Run(cfg core.Config) error {
 
 		// 2. Security Check (До всього іншого)
 		if err := secScanner.Scan(path, content); err != nil {
-			fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
+			fmt.Fprintf(logWriter, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
 			continue
 		}
 
-		// 3. Skeleton Mode (Модифікує content)
-		if cfg.SkeletonMode {
-			reduced, err := skeleton.Process(path, content)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
-			} else {
-				content = reduced
+		display := displayPaths[i]
+
+		// 3. Handle --symbols mode
+		if cfg.SymbolsOnly {
+			symbols, _ := skeleton.ExtractSymbols(path, content)
+			if len(symbols) == 0 {
+				continue // Skip files with no symbols in symbols-only mode
+			}
+			var symBuf bytes.Buffer
+			symBuf.WriteString("Symbols in this file:\n")
+			for _, s := range symbols {
+				scope := ""
+				if s.Parent != "" {
+					scope = " scope=\"" + s.Parent + "\""
+				}
+				fmt.Fprintf(&symBuf, "  <symbol name=\"%s\" type=\"%s\"%s lines=\"%d-%d\" />\n", s.Name, s.Type, scope, s.StartLine, s.EndLine)
+			}
+			content = symBuf.Bytes()
+		} else {
+			// 4. Targeted Implementation Extraction (Focus)
+			target := ""
+			if cfg.Implementation != "" {
+				target = cfg.Implementation
+			} else if cfg.FindSymbol != "" && cfg.Focus {
+				target = cfg.FindSymbol
+			}
+
+			if target != "" {
+				reduced, err := skeleton.ProcessSpecific(path, content, target)
+				if err != nil {
+					fmt.Fprintf(logWriter, "Warning: failed to focus on %s in %s: %v\n", target, path, err)
+				} else {
+					content = reduced
+				}
+			} else if cfg.SkeletonMode {
+				// 5. Standard Skeleton Mode
+				reduced, err := skeleton.Process(path, content)
+				if err != nil {
+					fmt.Fprintf(logWriter, "Warning: failed to skeletonize %s: %v\n", path, err)
+				} else {
+					content = reduced
+				}
 			}
 		}
 
-		// 4. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
+		// 6. Token Counting (Тільки ОДИН раз, після всіх модифікацій)
 		if cfg.CountTokens {
 			totalTokens += tk.Count(string(content))
 		}
 
-		// 5. Write Output
-		display := displayPaths[i]
+		// 7. Write Output
 		if err := fmtStrategy.AddFile(multiWriter, display, content); err != nil {
 			return err
 		}
@@ -241,22 +325,22 @@ func Run(cfg core.Config) error {
 	// final
 	if cfg.CopyToClipboard && clipboardBuf != nil {
 		if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
-			fmt.Fprintf(os.Stderr, "\nFailed to copy to clipboard: %v\n", err)
+			fmt.Fprintf(logWriter, "\nFailed to copy to clipboard: %v\n", err)
 		} else {
-			fmt.Fprintf(os.Stderr, "\nCopied to clipboard!\n")
+			fmt.Fprintf(logWriter, "\nCopied to clipboard!\n")
 		}
 	}
 
 	// stats
-	fmt.Fprintf(os.Stderr, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
+	fmt.Fprintf(logWriter, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
 	if cfg.CountTokens {
 		costStr := pricing.Estimate(totalTokens, cfg.ModelName)
-		fmt.Fprintf(os.Stderr, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
+		fmt.Fprintf(logWriter, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
 	}
 
 	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
 		fi, _ := os.Stat(cfg.OutputPath)
-		fmt.Fprintf(os.Stderr, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
+		fmt.Fprintf(logWriter, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
 	}
 
 	return nil

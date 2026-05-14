@@ -37,4 +37,13 @@ type Config struct {
 	IgnorePatterns  []string
 	DisableSecurity bool
 	ModelName       string
+
+	SymbolsOnly    bool
+	Implementation string
+	FindSymbol     string
+	Focus          bool
+
+	CustomWriter io.Writer // For MCP or other programmatic uses
+	LogWriter    io.Writer // For capturing stderr/logs
 }
+

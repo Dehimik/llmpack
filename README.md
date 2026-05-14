@@ -7,88 +7,102 @@ Designed for developers who are tired of manually copying and pasting files or s
 ## 🚀 Key Features
 
 * **Multi-Format Support:** Generate `XML` (best for prompting), `Markdown` (human-readable), or `ZIP` (for Code Interpreter).
-* **Skeleton Mode:** A unique mode that parses AST (for Go) and strips function bodies, leaving only structures and interfaces. Reduces token usage by **up to 80%** when discussing architecture.
+* **Universal Skeleton Mode:** Strips function/method bodies while preserving signatures. Supports **Go** (via AST), **Python** (via indentation), and **20+ C-family languages** (JS, TS, Java, C++, Rust, etc.).
+* **Semantic Indexing:** List all symbols, extract specific implementations, or search for symbols across the project.
 * **Cost Estimation:** Real-time token cost calculation for popular models (GPT-4o, Claude 3.5 Sonnet, Gemini 1.5).
 * **Security Scanner:** Automatically detects and blocks sensitive data (API keys, `.env` files, private keys) to prevent accidental leakage.
-* **Unix-way (Pipes):** Supports `STDIN`. You can pipe `git diff` or logs directly into LLMPack.
-* **Smart Filtering:** Respects `.gitignore`, ignores binary files, and filters system directories (`.git`, `node_modules`).
-* **Config Profiles:** Supports YAML configuration and profiles (e.g., different settings for `backend` vs `frontend`).
+* **MCP Compatible:** Works as a toolset for AI agents (Claude Code, Gemini CLI, etc.).
+* **Smart Filtering:** Respects `.gitignore`, ignores binary files, and filters system directories.
 
 ## 📦 Installation
 
-### Option 1: Go Install (Recommended)
+### Option 1: Using Makefile (Recommended)
 
-If you have Go (1.23+) installed:
-
-```bash
-go install github.com/dehimik/llmpack/cmd/llmpack@latest
-````
-
-### Option 2: Build from Source
+If you have Go (1.23+) and `make` installed:
 
 ```bash
 git clone https://github.com/dehimik/llmpack.git
 cd llmpack
-go build -o llmpack cmd/llmpack/main.go
+make install
+```
+This builds the binary and moves it to `/usr/local/bin/`.
 
-# Optional: Move to system path
-sudo mv llmpack /usr/local/bin/
+### Option 2: Go Install
+
+```bash
+go install github.com/dehimik/llmpack/cmd/llmpack@latest
 ```
 
 ## 🛠 Usage
 
-### Basic Usage
+### Semantic Features (New!)
 
-Pack the current directory into `context.xml` (default):
-
-```bash
-llmpack .
-```
-
-### Copy to Clipboard
-
-Pack specific folders and copy the result directly to the clipboard:
-
-```bash
-llmpack internal/ cmd/ -c
-```
+*   **List Symbols:** Get a compact index of all functions, classes, and methods.
+    ```bash
+    llmpack . --symbols
+    ```
+*   **Extract Implementation:** Show full code for a specific symbol and skeletonize everything else.
+    ```bash
+    llmpack . --implementation MyFunction
+    ```
+*   **Smart Search & Focus:** Find files containing a symbol and return them with that symbol's body expanded.
+    ```bash
+    llmpack . --find MyMethod --focus
+    ```
 
 ### Skeleton Mode (Save Tokens)
 
-Ideal for high-level architectural questions like "How do I refactor this module?". Leaves only signatures and types.
+Reduces token usage by **up to 80%** by hiding implementation details while keeping the architecture visible.
 
 ```bash
-llmpack . -s
-# Result: Compact context with "implementation hidden" bodies
+llmpack . --skeleton
 ```
 
-### Cost Estimation
+### AI Agents & MCP Support 🤖
 
-Check how much this context will cost for a specific model:
+LLMPack supports the **Model Context Protocol (MCP)**. Add it to your AI agent to give it "superpowers" over your codebase.
 
-```bash
-llmpack . --model claude-3-5-sonnet
-# Output: Total Tokens: ~15400 ($0.04620 for claude-3-5-sonnet)
+**Tools exposed via MCP:**
+- `list_symbols`: Browse project architecture.
+- `get_code`: Pull specific implementation of a symbol.
+- `search`: Find where a symbol is defined.
+- `scan_security`: Proactively check for secrets.
+- `estimate_cost`: Calculate token budget.
+- `get_tree`: Visualize project structure.
+
+**Claude Desktop Configuration:**
+Add this to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "llmpack": {
+      "command": "llmpack",
+      "args": ["mcp"]
+    }
+  }
+}
 ```
 
-### Git Diff & Piping
+## 🚩 Flags
 
-Need an AI Code Review for your latest changes? Pipe the diff:
-
-```bash
-git diff main | llmpack --no-tree
-```
-
-### Output Formats
-
-* **XML** (`-f xml`): Best structure for Claude/GPT prompts.
-* **Markdown** (`-f md`): Readable format with code blocks.
-* **Tree** (`-f tree`): Visual file tree only (no content).
-* **Zip** (`-f zip`): Archive for file uploads.
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path (or `-` for stdout) | `context.xml` |
+| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`) | `xml` |
+| `--skeleton` | `-s` | **Skeleton Mode**: Strip function bodies | `false` |
+| `--symbols` | | List all symbols in AI-friendly format | `false` |
+| `--implementation` | | Extract full implementation of a symbol | - |
+| `--find` | | Find files containing a specific symbol | - |
+| `--focus` | | In find mode, return only implementation + skeleton | `false` |
+| `--clipboard`| `-c` | Copy output to system clipboard | `false` |
+| `--model` | `-m` | Model for cost estimation (`gpt-4o`, `claude-3-5`...) | `gpt-4o` |
+| `--tokens` | | Calculate token count | `true` |
+| `--no-tree` | | Disable file tree header in output | `false` |
+| `--no-security`| | Disable secrets detection | `false` |
 
 ## ⚙️ Configuration
 
-You can create an `.llmpack.yaml` file in your project root or home directory:
+Create an `.llmpack.yaml` in your project root:
 
 ```yaml
 global:
@@ -104,40 +118,16 @@ profiles:
 ignore:
   - ".git"
   - "node_modules"
-  - "images"
   - "*.lock"
 ```
 
-Using a profile:
-
-```bash
-llmpack . -p backend
-```
-
-## 🚩 Flags
-
-| Flag | Short | Description | Default |
-|------|-------|-------------|---------|
-| `--output` | `-o` | Output file path (or `-` for stdout) | `context.xml` |
-| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`) | `xml` |
-| `--skeleton` | `-s` | **Skeleton Mode**: Strip function bodies | `false` |
-| `--clipboard`| `-c` | Copy output to system clipboard | `false` |
-| `--model` | `-m` | Model for cost estimation (`gpt-4o`, `claude-3-5`...) | `gpt-4o` |
-| `--profile` | `-p` | Use settings from a specific config profile | - |
-| `--config` | | Path to custom config file | `.llmpack.yaml` |
-| `--tokens` | | Calculate token count | `true` |
-| `--no-tree` | | Disable file tree header in output | `false` |
-| `--no-security`| | Disable secrets detection (use with caution) | `false` |
-
 ## 🏗 Architecture
 
-LLMPack is built with modularity and performance in mind:
-
-* **Core:** Uses Go 1.23 iterators (`iter.Seq2`) for efficient file system traversal.
-* **Streaming:** Utilizes `io.MultiWriter` to stream content to files and clipboard simultaneously without loading everything into RAM.
-* **AST Parsing:** Uses `go/ast` for "Skeleton Mode" to ensure valid code structure after reduction.
-* **Security:** Regex-based scanner to catch vulnerabilities before they enter the context.
+LLMPack is built for speed and AI-compatibility:
+* **Core:** Go 1.23 iterators for high-performance FS traversal.
+* **Streaming:** `io.MultiWriter` for efficient data flow.
+* **Heuristics:** Multi-language symbol extraction without heavy AST parsers.
 
 ## 📄 License
 
-MIT License. See [LICENSE](https://www.google.com/search?q=LICENSE) for details.
+MIT License.
