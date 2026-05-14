@@ -50,6 +50,32 @@ go install github.com/dehimik/llmpack/cmd/llmpack@latest
     llmpack . --find MyMethod --focus
     ```
 
+## 🤖 AI Agents & MCP Support
+
+LLMPack supports the **Model Context Protocol (MCP)**, allowing you to use it as a toolset directly within AI agents like **Claude Desktop**, **Claude Code**, **Codex**, or **Gemini CLI**.
+
+### Features exposed via MCP:
+- `list_symbols`: Browse project architecture without loading full files.
+- `get_code`: Pull specific implementation of a function/class.
+- `search`: Find where a symbol is defined and see its code.
+
+### Installation for Claude Desktop
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "llmpack": {
+      "command": "llmpack",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Make sure `llmpack` is in your `PATH` (run `make install`).
+
 ### Basic Usage
 
 Pack the current directory into `context.xml` (default):
@@ -141,6 +167,10 @@ llmpack . -p backend
 | `--tokens` | | Calculate token count | `true` |
 | `--no-tree` | | Disable file tree header in output | `false` |
 | `--no-security`| | Disable secrets detection (use with caution) | `false` |
+| `--symbols` | | List all symbols in AI-friendly format | `false` |
+| `--implementation` | | Extract full implementation of a symbol | - |
+| `--find` | | Find files containing a specific symbol | - |
+| `--focus` | | In find mode, return only the symbol implementation + skeleton | `false` |
 
 ## 🏗 Architecture
 
