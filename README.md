@@ -132,6 +132,24 @@ LLMPack is built for speed and AI-compatibility:
 * **Streaming:** `io.MultiWriter` for efficient data flow.
 * **Heuristics:** Multi-language symbol extraction without heavy AST parsers.
 
+## Inspiration
+
+Parts of this tool's logic and feature set were developed based on suggestions from [Dugd](https://github.com/Dugd). See their original implementation at [codeskeleton](https://github.com/dugd/codeskeleton).
+
+## Contributors
+
+Main contributor: [Dehimik](https://github.com/Dehimik)
+
+Special thanks to: *Coming soon...*
+
+Thanks for all contributors:
+
+<!-- contributors:start -->
+
+[![Dehimik](https://avatars.githubusercontent.com/Dehimik?s=64)](https://github.com/Dehimik)
+
+<!-- contributors:end -->
+
 ## 📄 License
 
 MIT License.
