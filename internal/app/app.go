@@ -40,6 +40,12 @@ func isPiped() bool {
 }
 
 func Run(cfg core.Config) error {
+	// Setup Log Writer
+	logWriter := io.Writer(os.Stderr)
+	if cfg.LogWriter != nil {
+		logWriter = cfg.LogWriter
+	}
+
 	// Setup Formatter
 	var fmtStrategy core.Formatter
 	secScanner := security.New(cfg.DisableSecurity)
@@ -108,7 +114,7 @@ func Run(cfg core.Config) error {
 		if len(content) > 0 {
 			// Security Check
 			if err := secScanner.Scan("stdin_input", content); err != nil {
-				fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
+				fmt.Fprintf(logWriter, "SECURITY WARNING: Skipping STDIN -> %v\n", err)
 			} else {
 				if !isBinary(content) {
 					if cfg.CountTokens {
@@ -117,7 +123,7 @@ func Run(cfg core.Config) error {
 					if err := fmtStrategy.AddFile(multiWriter, "STDIN", content); err != nil {
 						return err
 					}
-					fmt.Fprintf(os.Stderr, "Added content from STDIN (%d bytes)\n", len(content))
+					fmt.Fprintf(logWriter, "Added content from STDIN (%d bytes)\n", len(content))
 				}
 			}
 		}
@@ -144,7 +150,7 @@ func Run(cfg core.Config) error {
 
 	for path, err := range wk.Walk() {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error accessing %s: %v\n", path, err)
+			fmt.Fprintf(logWriter, "Error accessing %s: %v\n", path, err)
 			continue
 		}
 
@@ -226,9 +232,9 @@ func Run(cfg core.Config) error {
 		fmt.Println("Tree generated.")
 		if cfg.CopyToClipboard && clipboardBuf != nil {
 			if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy to clipboard: %v\n", err)
+				fmt.Fprintf(logWriter, "Failed to copy to clipboard: %v\n", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "Copied to clipboard!\n")
+				fmt.Fprintf(logWriter, "Copied to clipboard!\n")
 			}
 		}
 		return nil
@@ -251,7 +257,7 @@ func Run(cfg core.Config) error {
 
 		// 2. Security Check (До всього іншого)
 		if err := secScanner.Scan(path, content); err != nil {
-			fmt.Fprintf(os.Stderr, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
+			fmt.Fprintf(logWriter, "SECURITY WARNING: Skipping %s -> %v\n", path, err)
 			continue
 		}
 
@@ -285,7 +291,7 @@ func Run(cfg core.Config) error {
 			if target != "" {
 				reduced, err := skeleton.ProcessSpecific(path, content, target)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to focus on %s in %s: %v\n", target, path, err)
+					fmt.Fprintf(logWriter, "Warning: failed to focus on %s in %s: %v\n", target, path, err)
 				} else {
 					content = reduced
 				}
@@ -293,7 +299,7 @@ func Run(cfg core.Config) error {
 				// 5. Standard Skeleton Mode
 				reduced, err := skeleton.Process(path, content)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to skeletonize %s: %v\n", path, err)
+					fmt.Fprintf(logWriter, "Warning: failed to skeletonize %s: %v\n", path, err)
 				} else {
 					content = reduced
 				}
@@ -319,22 +325,22 @@ func Run(cfg core.Config) error {
 	// final
 	if cfg.CopyToClipboard && clipboardBuf != nil {
 		if err := clipboard.WriteAll(clipboardBuf.String()); err != nil {
-			fmt.Fprintf(os.Stderr, "\nFailed to copy to clipboard: %v\n", err)
+			fmt.Fprintf(logWriter, "\nFailed to copy to clipboard: %v\n", err)
 		} else {
-			fmt.Fprintf(os.Stderr, "\nCopied to clipboard!\n")
+			fmt.Fprintf(logWriter, "\nCopied to clipboard!\n")
 		}
 	}
 
 	// stats
-	fmt.Fprintf(os.Stderr, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
+	fmt.Fprintf(logWriter, "\nDone! Processed: %d/%d files.\n", filesProcessed, len(files))
 	if cfg.CountTokens {
 		costStr := pricing.Estimate(totalTokens, cfg.ModelName)
-		fmt.Fprintf(os.Stderr, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
+		fmt.Fprintf(logWriter, "Total Tokens: ~%d (%s for %s)\n", totalTokens, costStr, cfg.ModelName)
 	}
 
 	if cfg.OutputPath != "" && cfg.OutputPath != "-" {
 		fi, _ := os.Stat(cfg.OutputPath)
-		fmt.Fprintf(os.Stderr, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
+		fmt.Fprintf(logWriter, "Created: %s (%v bytes)\n", cfg.OutputPath, fi.Size())
 	}
 
 	return nil

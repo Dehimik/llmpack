@@ -22,7 +22,6 @@ type SearchArgs struct {
 	Query string `json:"query" jsonschema:"required,description=Symbol name to search for across the project"`
 	Focus bool   `json:"focus" jsonschema:"description=If true, return only the symbol implementation and skeletons for the rest of the file. Default is true.,default=true"`
 }
-
 func Start() error {
 	s := mcp.NewServer(stdio.NewStdioServerTransport())
 
@@ -35,7 +34,7 @@ func Start() error {
 			CustomWriter: &buf,
 			NoTree:       true,
 		}
-		
+
 		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
 
 		if err := app.Run(cfg); err != nil {
@@ -57,7 +56,7 @@ func Start() error {
 			CustomWriter:   &buf,
 			NoTree:         true,
 		}
-		
+
 		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
 
 		if err := app.Run(cfg); err != nil {
@@ -80,7 +79,7 @@ func Start() error {
 			CustomWriter: &buf,
 			NoTree:       true,
 		}
-		
+
 		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
 
 		if err := app.Run(cfg); err != nil {
@@ -93,5 +92,70 @@ func Start() error {
 		return err
 	}
 
+	// 4. Security Scan
+	s.RegisterTool("scan_security", "Check the project for hardcoded secrets and sensitive files", func(args ListSymbolsArgs) (*mcp.ToolResponse, error) {
+		var logBuf bytes.Buffer
+		cfg := core.Config{
+			InputPaths:      []string{args.Path},
+			LogWriter:       &logBuf,
+			DisableSecurity: false,
+			Format:          "tree", // We just want to trigger the walk
+		}
+
+		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
+
+		_ = app.Run(cfg) // Run can fail on errors, but we care about log content
+
+		if logBuf.Len() == 0 {
+			return mcp.NewToolResponse(mcp.NewTextContent("No security issues detected.")), nil
+		}
+
+		return mcp.NewToolResponse(mcp.NewTextContent(logBuf.String())), nil
+	})
+
+	// 5. Estimate Cost
+	type EstimateArgs struct {
+		Path  string `json:"path" jsonschema:"required,description=Path to the project"`
+		Model string `json:"model" jsonschema:"description=Model name (gpt-4o, claude-3-5-sonnet, gemini-1.5-pro)"`
+	}
+	s.RegisterTool("estimate_cost", "Calculate token count and estimated cost for the project", func(args EstimateArgs) (*mcp.ToolResponse, error) {
+		var logBuf bytes.Buffer
+		cfg := core.Config{
+			InputPaths:  []string{args.Path},
+			LogWriter:   &logBuf,
+			CountTokens: true,
+			ModelName:   args.Model,
+			Format:      "tree", // Fast run
+		}
+		if cfg.ModelName == "" {
+			cfg.ModelName = "gpt-4o"
+		}
+
+		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
+
+		_ = app.Run(cfg)
+
+		return mcp.NewToolResponse(mcp.NewTextContent(logBuf.String())), nil
+	})
+
+	// 6. Get Tree
+	s.RegisterTool("get_tree", "Get a visual directory tree of the project", func(args ListSymbolsArgs) (*mcp.ToolResponse, error) {
+		var buf bytes.Buffer
+		cfg := core.Config{
+			InputPaths:   []string{args.Path},
+			Format:       "tree",
+			CustomWriter: &buf,
+		}
+
+		cfg.IgnorePatterns = []string{".git", "node_modules", "vendor", "dist", "build"}
+
+		if err := app.Run(cfg); err != nil {
+			return nil, err
+		}
+
+		return mcp.NewToolResponse(mcp.NewTextContent(buf.String())), nil
+	})
+
 	return s.Serve()
 }
+

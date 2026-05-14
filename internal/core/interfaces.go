@@ -44,5 +44,6 @@ type Config struct {
 	Focus          bool
 
 	CustomWriter io.Writer // For MCP or other programmatic uses
+	LogWriter    io.Writer // For capturing stderr/logs
 }
 
