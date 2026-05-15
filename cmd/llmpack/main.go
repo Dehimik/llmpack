@@ -100,6 +100,8 @@ func packRun(cmd *cobra.Command, args []string) {
 			cfg.OutputPath = "context.zip"
 		} else if cfg.Format == "llms-txt" || cfg.Format == "llms" {
 			cfg.OutputPath = "llms.txt"
+		} else if cfg.Format == "tree" {
+			cfg.OutputPath = "-"
 		} else {
 			cfg.OutputPath = "context.xml"
 		}
@@ -144,9 +146,25 @@ func setupFlags() {
 	rootCmd.PersistentFlags().BoolVar(&cfg.Focus, "focus", false, "In find mode, return only the symbol implementation + skeleton")
 }
 
+var treeCmd = &cobra.Command{
+	Use:   "tree [path]",
+	Short: "Show visual directory tree",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg.Format = "tree"
+		cfg.OutputPath = "-"
+		cfg.NoTree = false
+		if len(args) == 0 {
+			args = []string{"."}
+		}
+		packRun(cmd, args)
+	},
+}
+
 func main() {
 	setupFlags()
 	rootCmd.AddCommand(packCmd)
+	rootCmd.AddCommand(treeCmd)
 
 	// If no args or first arg is not a command, default to 'pack'
 	if len(os.Args) > 1 {
