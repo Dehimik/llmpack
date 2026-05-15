@@ -6,9 +6,10 @@ Designed for developers who are tired of manually copying and pasting files or s
 
 ## 🚀 Key Features
 
-* **Multi-Format Support:** Generate `XML` (best for prompting), `Markdown` (human-readable), or `ZIP` (for Code Interpreter).
+* **Multi-Format Support:** Generate `XML` (best for prompting), `Markdown` (human-readable), `ZIP` (for Code Interpreter), or **`llms.txt`** (standardized project index).
 * **Universal Skeleton Mode:** Strips function/method bodies while preserving signatures. Supports **Go** (via AST), **Python** (via indentation), and **20+ C-family languages** (JS, TS, Java, C++, Rust, etc.).
 * **Semantic Indexing:** List all symbols, extract specific implementations, or search for symbols across the project.
+* **Auto-Metadata Extraction:** Automatically detects project name and summary from your `README.md` to enrich `llms.txt` and `Markdown` outputs.
 * **Cost Estimation:** Real-time token cost calculation for popular models (GPT-4o, Claude 3.5 Sonnet, Gemini 1.5).
 * **Security Scanner:** Automatically detects and blocks sensitive data (API keys, `.env` files, private keys) to prevent accidental leakage.
 * **MCP Compatible:** Works as a toolset for AI agents (Claude Code, Gemini CLI, etc.).
@@ -50,17 +51,27 @@ go install github.com/dehimik/llmpack/cmd/llmpack@latest
     llmpack . --find MyMethod --focus
     ```
 
-### Skeleton Mode (Save Tokens)
+### llms.txt Support (Answer.AI Spec)
 
-Reduces token usage by **up to 80%** by hiding implementation details while keeping the architecture visible.
+Generate a standardized project index for LLMs:
+```bash
+llmpack pack -f llms-txt .
+```
+This will automatically create an `llms.txt` file with your project's H1 title and summary extracted from `README.md`.
 
-### Features exposed via MCP:
-- `list_symbols`: Browse project architecture without loading full files.
-- `get_code`: Pull specific implementation of a function/class.
-- `search`: Find where a symbol is defined and see its code.
-- `scan_security`: Run a security audit for secrets and sensitive files.
-- `estimate_cost`: Calculate token usage and pricing for the project.
-- `get_tree`: Generate a visual directory structure.
+### Shell Autocompletion
+
+Enable intelligent autocompletion for commands and flags (supports bash, zsh, fish, powershell).
+
+**For Zsh:**
+```bash
+echo 'source <(llmpack completion zsh)' >> ~/.zshrc
+```
+
+**For Bash:**
+```bash
+source <(llmpack completion bash)
+```
 
 ### AI Agents & MCP Support 🤖
 
@@ -92,7 +103,7 @@ Add this to your `claude_desktop_config.json`:
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--output` | `-o` | Output file path (or `-` for stdout) | `context.xml` |
-| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`) | `xml` |
+| `--format` | `-f` | Output format (`xml`, `markdown`, `zip`, `tree`, `llms-txt`) | `xml` |
 | `--skeleton` | `-s` | **Skeleton Mode**: Strip function bodies | `false` |
 | `--symbols` | | List all symbols in AI-friendly format | `false` |
 | `--implementation` | | Extract full implementation of a symbol | - |

@@ -57,6 +57,8 @@ func Run(cfg core.Config) error {
 		fmtStrategy = formatter.NewZip()
 	case "markdown", "md":
 		fmtStrategy = formatter.NewMarkdown()
+	case "llms-txt", "llms":
+		fmtStrategy = formatter.NewLLMSTxt()
 	case "tree":
 		fmtStrategy = formatter.NewTree()
 	default:
