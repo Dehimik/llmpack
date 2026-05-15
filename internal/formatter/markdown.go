@@ -1,20 +1,72 @@
 package formatter
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 )
 
-type MarkdownFormatter struct{}
+type MarkdownFormatter struct {
+	projectName string
+	summary     string
+}
 
-func NewMarkdown() *MarkdownFormatter { return &MarkdownFormatter{} }
+func NewMarkdown() *MarkdownFormatter {
+	f := &MarkdownFormatter{
+		projectName: "Project Context",
+	}
+	f.detectProjectInfo()
+	return f
+}
+
+func (f *MarkdownFormatter) detectProjectInfo() {
+	cwd, err := os.Getwd()
+	if err == nil {
+		f.projectName = filepath.Base(cwd)
+	}
+
+	// Try to get info from README.md
+	readmePath := "README.md"
+	if _, err := os.Stat(readmePath); err == nil {
+		file, err := os.Open(readmePath)
+		if err == nil {
+			defer file.Close()
+			scanner := bufio.NewScanner(file)
+			foundH1 := false
+			foundSummary := false
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" {
+					continue
+				}
+				if !foundH1 && strings.HasPrefix(line, "# ") {
+					f.projectName = strings.TrimPrefix(line, "# ")
+					foundH1 = true
+					continue
+				}
+				if foundH1 && !foundSummary && !strings.HasPrefix(line, "#") {
+					f.summary = line
+					foundSummary = true
+				}
+				if foundH1 && foundSummary {
+					break
+				}
+			}
+		}
+	}
+}
 
 func (f *MarkdownFormatter) Name() string { return "markdown" }
 
 func (f *MarkdownFormatter) Start(w io.Writer) error {
-	_, err := io.WriteString(w, "# Project Context\n\n")
+	header := fmt.Sprintf("# %s\n\n", f.projectName)
+	if f.summary != "" {
+		header += fmt.Sprintf("> %s\n\n", f.summary)
+	}
+	_, err := io.WriteString(w, header)
 	return err
 }
 

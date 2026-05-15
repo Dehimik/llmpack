@@ -98,6 +98,8 @@ func packRun(cmd *cobra.Command, args []string) {
 			cfg.OutputPath = "context.md"
 		} else if cfg.Format == "zip" {
 			cfg.OutputPath = "context.zip"
+		} else if cfg.Format == "llms-txt" || cfg.Format == "llms" {
+			cfg.OutputPath = "llms.txt"
 		} else {
 			cfg.OutputPath = "context.xml"
 		}
@@ -112,11 +114,21 @@ func packRun(cmd *cobra.Command, args []string) {
 func setupFlags() {
 	// Flags are now persistent so they apply to both 'pack' and 'root' (and thus subcommands)
 	rootCmd.PersistentFlags().StringVarP(&cfg.OutputPath, "output", "o", "", "Output file path")
-	rootCmd.PersistentFlags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree)")
+	rootCmd.PersistentFlags().StringVarP(&cfg.Format, "format", "f", "xml", "Output format (xml, markdown, zip, tree, llms-txt)")
+
+	// Autocompletion for formats
+	_ = rootCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"xml", "markdown", "md", "llms-txt", "llms", "zip", "tree"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	rootCmd.PersistentFlags().BoolVar(&cfg.IgnoreGit, "ignore-git", true, "Use .gitignore")
 	rootCmd.PersistentFlags().BoolVar(&cfg.CountTokens, "tokens", true, "Count tokens")
 	rootCmd.PersistentFlags().StringVarP(&cfg.ModelName, "model", "m", "gpt-4o", "Model for cost estimation (gpt-4o, claude-3-5-sonnet, etc.)")
+
+	// Autocompletion for models
+	_ = rootCmd.RegisterFlagCompletionFunc("model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo", "claude-3-5-sonnet", "claude-3-opus", "gemini-1.5-pro", "gemini-1.5-flash"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	rootCmd.PersistentFlags().BoolVar(&cfg.NoTree, "no-tree", false, "Disable file tree in output header")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.CopyToClipboard, "clipboard", "c", false, "Copy output to clipboard")
@@ -140,12 +152,26 @@ func main() {
 	if len(os.Args) > 1 {
 		found := false
 		cmdName := os.Args[1]
+
+		// Check registered commands
 		for _, c := range rootCmd.Commands() {
 			if c.Name() == cmdName || c.HasAlias(cmdName) {
 				found = true
 				break
 			}
 		}
+
+		// Also check built-in Cobra commands and aliases
+		if !found {
+			builtIns := []string{"completion", "help", "__complete"}
+			for _, b := range builtIns {
+				if cmdName == b {
+					found = true
+					break
+				}
+			}
+		}
+
 		// If it's a flag, it's also for the root/pack
 		if !found && !strings.HasPrefix(cmdName, "-") {
 			os.Args = append([]string{os.Args[0], "pack"}, os.Args[1:]...)
